@@ -1,2 +1,3 @@
-# -rl_bomberman_agent
-A Reinforcement Learning (RL) model to play the arcade game Bomberman.
+# bomberman_rl
+Setup for a project/competition amongst students to train a winning Reinforcement Learning agent for the classic game Bomberman.
+
