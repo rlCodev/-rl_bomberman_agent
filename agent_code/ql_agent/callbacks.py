@@ -35,7 +35,7 @@ def setup(self):
         self.q_table = None
     else:
         self.logger.info("Loading Q-table from saved state.")
-        with open("my-saved-qtable.pt", "rb") as file:
+        with open("coin-collector-qtable.pt", "rb") as file:
             self.q_table = pickle.load(file)
 
 
@@ -71,7 +71,9 @@ def act(self, game_state: dict) -> str:
     else:
         state = state_to_features(game_state)
         action_index = np.argmax(self.q_table[state, :])
+        self.logger.info(f'Taking action: {ACTIONS[action_index]}')
         return ACTIONS[action_index]
+    
 
 
     # # todo Exploration vs exploitation

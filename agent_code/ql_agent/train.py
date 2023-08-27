@@ -40,7 +40,7 @@ def setup_training(self):
     self.transitions = deque(maxlen=TRANSITION_HISTORY_SIZE)
 
     # Set hyperparameters for agent
-    self.dicount_factor = DISCOUNT_FACTOR
+    self.discount_factor = DISCOUNT_FACTOR
     self.eps = EPS
     self.eps_decay_factor = EPS_DECAY_FACTOR
     self.learning_rate = LEARNING_RATE
