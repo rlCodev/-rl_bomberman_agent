@@ -11,6 +11,7 @@
                 "play",
                 "--agents",
                 "random_agent",
+                "coin_collector_agent",
                 "ql_agent",
                 "--no-gui"
             ],
