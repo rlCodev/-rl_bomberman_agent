@@ -37,7 +37,7 @@ def setup(self):
         self.logger.info("Loading Q-table from saved state.")
         with open("coin-collector-qtable.pt", "rb") as file:
             self.q_table = pickle.load(file)
-
+        self.logger.info("Q-Table looks like this:" + str(self.q_table))
 
 def act(self, game_state: dict) -> str:
     """
