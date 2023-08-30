@@ -97,38 +97,19 @@ def state_to_features(game_state: dict) -> np.array:
     if game_state is None:
         return None
     
+    # celltype, self_position, other_position, coin, danger
+    gamestate_2d = [[[value,0,0,0,0] for value in row] for row in game_state['field']]
+
     # Extract relevant information from the game state
-    field = game_state['field']
-    player_state = game_state['self']
+    self_position = game_state['self'][3]
+    others_positions = game_state['others']
     coins = game_state['coins']
     bombs = game_state['bombs']
-    
-    # Create channels for different features
-    channels = []
-    
-    # Channel for walls and crates
-    wall_crate_channel = np.where(field == -1, 1, 0)  # Walls and crates are set to 1, rest to 0
-    channels.append(wall_crate_channel)
-    
-    # Channel for player's position
-    player_channel = np.zeros_like(field)
-    player_channel[player_state[3][1], player_state[3][0]] = 1  # Set player's position to 1
-    channels.append(player_channel)
-    
-    # Channel for coin positions
-    coin_channel = np.zeros_like(field)
-    for coin in coins:
-        coin_channel[coin] = 1  # Set coin positions to 1
-    channels.append(coin_channel)
-    
-    # Channel for bomb positions and timers
-    bomb_channel = np.zeros_like(field)
-    for bomb in bombs:
-        bomb_pos = bomb[0]
-        bomb_timer = bomb[1]
-        bomb_channel[bomb_pos] = bomb_timer  # Set bomb positions to their timers
-    channels.append(bomb_channel)
-    
+
+
+    gamestate_2d[self_position[0]][self_position[1]][1] = 1
+
+
     # Stack all channels and reshape into a vector
-    stacked_channels = np.stack(channels)
+    stacked_channels = np.stack(gamestate_2d)
     return stacked_channels.reshape(-1)

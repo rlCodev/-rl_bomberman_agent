@@ -1,0 +1,20 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Python: Custom Launch",
+            "type": "python",
+            "request": "launch",
+            "program": "main.py", //"C:\\Users\\Jakob\\Documents\\MasterUniHD\\MLEssentials\\Projekt\\-rl_bomberman_agent\\main.py",
+            "console": "integratedTerminal",
+            "args": [
+                "play",
+                "--agents",
+                "random_agent",
+                "ql_agent",
+                "--no-gui"
+            ],
+            "justMyCode": true
+        }
+    ]
+}
