@@ -10,9 +10,9 @@
             "args": [
                 "play",
                 "--agents",
-                "random_agent",
-                "coin_collector_agent",
                 "ql_agent",
+                // "--train",
+                // "1",
                 "--no-gui"
             ],
             "justMyCode": true

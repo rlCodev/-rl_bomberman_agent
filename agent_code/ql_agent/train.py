@@ -7,6 +7,8 @@ import events as e
 from .callbacks import state_to_features
 import numpy as np
 from torch import nn
+from torch.optim import SGD
+from .MLP import CustomMLP
 
 # This is only an example!
 Transition = namedtuple('Transition',
@@ -51,7 +53,13 @@ def setup_training(self):
     self.exploration_rate_decay = 0.99999975
     self.exploration_rate_min = 0.1
 
-    self.optimizer = torch.optim.SGD(self.model.parameters(), lr=self.learning_rate)
+    input_size = 1445  # Specify the appropriate input size based on your state representation
+    hidden_size = 100
+    output_size = len(ACTIONS)
+    self.model = CustomMLP(input_size, hidden_size, output_size)
+    
+    # Use SGD optimizer and Mean Squared Error loss function
+    self.optimizer = SGD(self.model.parameters(), lr=self.learning_rate)
     self.loss_function = nn.MSELoss()
 
 
@@ -80,20 +88,23 @@ def game_events_occurred(self, old_game_state: dict, self_action: str, new_game_
     #     events.append(PLACEHOLDER_EVENT)
 
     # state_to_features is defined in callbacks.py
-    self.transitions.append(Transition(state_to_features(old_game_state), self_action, state_to_features(new_game_state), reward_from_events(self, events)))
-
+    
     reward = reward_from_events(self, events)
-    old_state_features = state_to_features(old_game_state)
-    new_state_features = state_to_features(new_game_state)
+    self.transitions.append(Transition(state_to_features(old_game_state), self_action, state_to_features(new_game_state), reward))
+
+    old_state_features = torch.tensor(state_to_features(old_game_state), dtype=torch.float32).unsqueeze(0)
+    new_state_features = torch.tensor(state_to_features(new_game_state), dtype=torch.float32).unsqueeze(0)
 
     q_values_old = self.model(old_state_features)
-    q_values_new = self.model(new_state_features).max(dim=1).values.detach()
+    q_values_new = self.model(new_state_features)
+    max_q_new = torch.max(q_values_new).detach()  # Max Q-value for the next state
 
-    # Compute the target Q-value using Q-learning update
-    target_q_value = reward + self.discount_factor * q_values_new
+    # Calculate target Q-value using Q-learning update
+    target_q_value = reward + self.discount_factor * max_q_new
 
     # Compute the loss
-    loss = self.loss_function(q_values_old[0][self_action], target_q_value)
+    action_index = ACTIONS.index(self_action)
+    loss = self.loss_function(q_values_old[0][action_index], target_q_value)
 
     # Backpropagation and optimization
     self.optimizer.zero_grad()
@@ -125,7 +136,7 @@ def end_of_round(self, last_game_state: dict, last_action: str, events: List[str
 
     # Calculate reward from events
     reward = reward_from_events(self, events)
-    torch.save(model.state_dict(), 'custom_mlp_model.pth')
+    torch.save(self.model.state_dict(), 'custom_mlp_model.pth')
     
 
 

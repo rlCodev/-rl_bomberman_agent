@@ -28,11 +28,4 @@ class CustomMLP(nn.Module):
         output = self.output_layer(hidden_output)
         return output
 
-# Define input size, hidden size, and output size
-input_size = ...
-hidden_size = 100
-output_size = ...
-
-# Create an instance of the custom MLP model
-# model = CustomMLP(input_size, hidden_size, output_size)
-# print(model)  # Print the model architecture
+#end

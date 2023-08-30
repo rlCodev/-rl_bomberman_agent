@@ -1,5 +1,5 @@
 import os
-from MLP import CustomMLP
+from .MLP import CustomMLP
 import numpy as np
 import torch
 
@@ -30,7 +30,7 @@ def setup(self):
     #     with open("my-saved-model.pt", "rb") as file:
     #         self.model = pickle.load(file)
     input_size = 1445
-    hidden_size = 1
+    hidden_size = 100
     output_size = len(ACTIONS)
 
     if self.train or not os.path.isfile("coin-collector-qtable.pt"):
@@ -66,19 +66,22 @@ def act(self, game_state: dict) -> str:
     #     'coins': [coin.get_state() for coin in self.coins if coin.collectable],
     #     'user_input': self.user_input,
     # }
-    if self.q_table is None:
+    if self.model is None:
         state_space_size = state_to_features(game_state).shape[0]
-        self.q_table = np.zeros([state_space_size, len(ACTIONS)])  # Initialize Q-table with zeros
+        self.model = CustomMLP(state_space_size, 100, len(ACTIONS))  # Initialize the custom MLP model
 
     if self.train and np.random.rand() < self.exploration_rate:
         self.logger.debug("Choosing action purely at random.")
         # 80%: walk in any direction. 10% wait. 10% bomb.
         return np.random.choice(ACTIONS, p=[.2, .2, .2, .2, .1, .1])
     else:
-        state = state_to_features(game_state)
-        action_index = np.argmax(self.q_table[state, :])
-        self.logger.info(f'Taking action: {ACTIONS[0]}')
-        return ACTIONS[0]
+        state = torch.tensor(state_to_features(game_state), dtype=torch.float32).unsqueeze(0)  # Add batch dimension
+        print(state)
+        q_values = self.model(state)
+        action_index = torch.argmax(q_values).item()
+        chosen_action = ACTIONS[action_index]
+        self.logger.info(f'Taking action: {chosen_action}')
+        return chosen_action
     
 
 
@@ -133,7 +136,7 @@ def state_to_features(game_state: dict) -> np.array:
             # Relative time to detnation remaining. After dropping a bomb it takes 4 time steps t to detonate.
             # Negative for own and positive for others bombs is not possible from this feature space.
             danger_level = bomb[1]/4
-            gamestate_2d[bomb[0]][bomb[1]][3] = danger_level
+            gamestate_2d[bomb[0][0]][bomb[0][1]][3] = danger_level
     else:
         danger_level = bombs[1]/4
         gamestate_2d[bombs[0]][bombs[1]][3] = danger_level
