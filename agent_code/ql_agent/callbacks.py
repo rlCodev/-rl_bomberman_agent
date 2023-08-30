@@ -1,8 +1,7 @@
 import os
-import pickle
-import random
-
+from MLP import CustomMLP
 import numpy as np
+import torch
 
 
 ACTIONS = ['UP', 'RIGHT', 'DOWN', 'LEFT', 'WAIT', 'BOMB']
@@ -30,13 +29,20 @@ def setup(self):
     #     self.logger.info("Loading model from saved state.")
     #     with open("my-saved-model.pt", "rb") as file:
     #         self.model = pickle.load(file)
+    input_size = 1445
+    hidden_size = 1
+    output_size = len(ACTIONS)
+
     if self.train or not os.path.isfile("coin-collector-qtable.pt"):
-        self.logger.info("Setting up Q-table from scratch.")
-        self.q_table = None
+        # Size of feature representation below
+        self.model = CustomMLP(input_size, hidden_size, output_size)
     else:
-        self.logger.info("Loading Q-table from saved state.")
-        with open("coin-collector-qtable.pt", "rb") as file:
-            self.q_table = pickle.load(file)
+        self.logger.info("Loading MLP from saved state.")
+        # Create an instance of the custom MLP model
+        self.model = CustomMLP(input_size, hidden_size, output_size)
+
+        # Load the saved model state dictionary
+        self.model.load_state_dict(torch.load('custom_mlp_model.pth'))
 
 
 def act(self, game_state: dict) -> str:
@@ -71,8 +77,8 @@ def act(self, game_state: dict) -> str:
     else:
         state = state_to_features(game_state)
         action_index = np.argmax(self.q_table[state, :])
-        self.logger.info(f'Taking action: {ACTIONS[action_index]}')
-        return ACTIONS[action_index]
+        self.logger.info(f'Taking action: {ACTIONS[0]}')
+        return ACTIONS[0]
     
 
 
@@ -102,14 +108,37 @@ def state_to_features(game_state: dict) -> np.array:
 
     # Extract relevant information from the game state
     self_position = game_state['self'][3]
-    others_positions = game_state['others']
+    others_positions = [o[3] for o in game_state['others']]
     coins = game_state['coins']
     bombs = game_state['bombs']
 
-
+    # Add self to gamestate
     gamestate_2d[self_position[0]][self_position[1]][1] = 1
-
-
-    # Stack all channels and reshape into a vector
+    # Add others to gamestate
+    if (type(others_positions) == list):
+        for other in others_positions:
+            gamestate_2d[other[0]][other[1]][2] = 1
+    else:
+        gamestate_2d[others_positions[0]][others_positions[1]][2] = 1
+    
+    # Add coins to gamestate
+    if (type(coins) == list):
+        for coin in coins:
+            gamestate_2d[coin[0]][coin[1]][3] = 1
+    else:
+        gamestate_2d[coins[0]][coins[1]][3] = 1
+    # Add danger level of position
+    if (type(bombs) == list):
+        for bomb in bombs:
+            # Relative time to detnation remaining. After dropping a bomb it takes 4 time steps t to detonate.
+            # Negative for own and positive for others bombs is not possible from this feature space.
+            danger_level = bomb[1]/4
+            gamestate_2d[bomb[0]][bomb[1]][3] = danger_level
+    else:
+        danger_level = bombs[1]/4
+        gamestate_2d[bombs[0]][bombs[1]][3] = danger_level
+    
+    # Stack all  and reshape into a vector
     stacked_channels = np.stack(gamestate_2d)
-    return stacked_channels.reshape(-1)
+    gamestate_one_hot = stacked_channels.reshape(-1)
+    return gamestate_one_hot
