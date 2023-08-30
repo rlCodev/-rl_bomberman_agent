@@ -34,5 +34,5 @@ hidden_size = 100
 output_size = ...
 
 # Create an instance of the custom MLP model
-model = CustomMLP(input_size, hidden_size, output_size)
-print(model)  # Print the model architecture
+# model = CustomMLP(input_size, hidden_size, output_size)
+# print(model)  # Print the model architecture

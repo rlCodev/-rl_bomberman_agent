@@ -1,8 +1,7 @@
 import os
-import pickle
-import random
-
+from MLP import CustomMLP
 import numpy as np
+import torch
 
 
 ACTIONS = ['UP', 'RIGHT', 'DOWN', 'LEFT', 'WAIT', 'BOMB']
@@ -30,13 +29,20 @@ def setup(self):
     #     self.logger.info("Loading model from saved state.")
     #     with open("my-saved-model.pt", "rb") as file:
     #         self.model = pickle.load(file)
+    input_size = 1445
+    hidden_size = 1
+    output_size = len(ACTIONS)
+
     if self.train or not os.path.isfile("coin-collector-qtable.pt"):
-        self.logger.info("Setting up Q-table from scratch.")
-        self.q_table = None
+        # Size of feature representation below
+        self.model = CustomMLP(input_size, hidden_size, output_size)
     else:
-        self.logger.info("Loading Q-table from saved state.")
-        with open("coin-collector-qtable.pt", "rb") as file:
-            self.q_table = pickle.load(file)
+        self.logger.info("Loading MLP from saved state.")
+        # Create an instance of the custom MLP model
+        self.model = CustomMLP(input_size, hidden_size, output_size)
+
+        # Load the saved model state dictionary
+        self.model.load_state_dict(torch.load('custom_mlp_model.pth'))
 
 
 def act(self, game_state: dict) -> str:

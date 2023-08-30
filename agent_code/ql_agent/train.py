@@ -1,5 +1,5 @@
 from collections import namedtuple, deque
-
+import torch
 import pickle
 from typing import List
 
@@ -83,15 +83,9 @@ def game_events_occurred(self, old_game_state: dict, self_action: str, new_game_
     # q_table[state, action] += reward + learning_rate * (discount_factor * np.max(q_table[new_state, :]) - q_table[state, action])
     # Calculate reward from events
     reward = reward_from_events(self, events)
+    
 
-    # Update Q-table using Q-learning
-    old_state = state_to_features(old_game_state)
-    new_state = state_to_features(new_game_state)
-    old_q_value = self.q_table[old_state, ACTIONS.index(self_action)]
-    max_future_q = np.max(self.q_table[new_state, :])
-    new_q_value = (1 - self.learning_rate) * old_q_value + self.learning_rate * (reward + self.discount_factor * max_future_q)
-    self.q_table[old_state, ACTIONS.index(self_action)] = new_q_value
-
+    
 
 def end_of_round(self, last_game_state: dict, last_action: str, events: List[str]):
     """
@@ -115,16 +109,8 @@ def end_of_round(self, last_game_state: dict, last_action: str, events: List[str
 
     # Calculate reward from events
     reward = reward_from_events(self, events)
-
-    # Update Q-table using Q-learning for the last action-state pair
-    old_state = state_to_features(last_game_state)
-    old_q_value = self.q_table[old_state, ACTIONS.index(last_action)]
-    new_q_value = old_q_value + self.learning_rate * (reward - old_q_value)
-    self.q_table[old_state, ACTIONS.index(last_action)] = new_q_value
-
-    # Store the Q-table
-    with open("coin-collector-qtable.pt", "wb") as file:
-        pickle.dump(self.q_table, file)
+    torch.save(model.state_dict(), 'custom_mlp_model.pth')
+    
 
 
 def reward_from_events(self, events: List[str]) -> int:
