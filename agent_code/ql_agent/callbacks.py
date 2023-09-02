@@ -33,7 +33,7 @@ def setup(self):
     hidden_size = 100
     output_size = len(ACTIONS)
 
-    if self.train or not os.path.isfile("coin-collector-qtable.pt"):
+    if not os.path.isfile("custom_mlp_model.pth"):
         # Size of feature representation below
         self.model = CustomMLP(input_size, hidden_size, output_size)
     else:
@@ -75,8 +75,7 @@ def act(self, game_state: dict) -> str:
         # 80%: walk in any direction. 10% wait. 10% bomb.
         return np.random.choice(ACTIONS, p=[.2, .2, .2, .2, .1, .1])
     else:
-        state = torch.tensor(state_to_features(game_state), dtype=torch.float32).unsqueeze(0)  # Add batch dimension
-        print(state)
+        state = torch.tensor(state_to_features(game_state), dtype=torch.float32)  # Add batch dimension
         q_values = self.model(state)
         action_index = torch.argmax(q_values).item()
         chosen_action = ACTIONS[action_index]
