@@ -33,7 +33,7 @@ def setup(self):
     hidden_size = 100
     output_size = len(ACTIONS)
 
-    if not os.path.isfile("custom_mlp_model.pb"):
+    if not os.path.isfile("custom_mlp_model.pth"):
         # Size of feature representation below
         self.model = CustomMLP(input_size, hidden_size, output_size)
     else:
@@ -42,8 +42,7 @@ def setup(self):
         self.model = CustomMLP(input_size, hidden_size, output_size)
 
         # Load the saved model state dictionary
-        self.model = torch.load('custom_mlp_model.pb')
-
+        self.model = torch.load('custom_mlp_model.pth')
 
 def act(self, game_state: dict) -> str:
     """

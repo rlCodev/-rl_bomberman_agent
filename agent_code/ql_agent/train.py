@@ -14,14 +14,14 @@ from .MLP import CustomMLP
 Transition = namedtuple('Transition',
                         ('state', 'action', 'next_state', 'reward'))
 
-# Hyper parameters -- DO modify
+# Hyper parameters -- TODO modify/optimize
 TRANSITION_HISTORY_SIZE = 3  # keep only ... last transitions
 RECORD_ENEMY_TRANSITIONS = 1.0  # record enemy transitions with probability ...
 
 DISCOUNT_FACTOR = 0.95
 EPS = 0.5
 EPS_DECAY_FACTOR = 0.999
-LEARNING_RATE = 0.8
+LEARNING_RATE = 0.01 # crucial against exploding gradients
 NUM_EPISODES = 500
 
 ACTIONS = ['UP', 'RIGHT', 'DOWN', 'LEFT', 'WAIT', 'BOMB']
@@ -38,7 +38,7 @@ def setup_training(self):
 
     :param self: This object is passed to all callbacks and you can set arbitrary values.
     """
-    # Example: Setup an array that will note transition tuples
+    # Example: Set up an array that will note transition tuples
     # (s, a, r, s')
     self.transitions = deque(maxlen=TRANSITION_HISTORY_SIZE)
 
@@ -53,11 +53,9 @@ def setup_training(self):
     self.exploration_rate_decay = 0.99999975
     self.exploration_rate_min = 0.1
 
-    
     # Use SGD optimizer and Mean Squared Error loss function
     self.optimizer = SGD(self.model.parameters(), lr=self.learning_rate)
     self.loss_function = nn.MSELoss()
-
 
 
 def game_events_occurred(self, old_game_state: dict, self_action: str, new_game_state: dict, events: List[str]):
@@ -84,17 +82,19 @@ def game_events_occurred(self, old_game_state: dict, self_action: str, new_game_
     #     events.append(PLACEHOLDER_EVENT)
 
     # state_to_features is defined in callbacks.py
-    
-    reward = reward_from_events(self, events)
-    self.transitions.append(Transition(state_to_features(old_game_state), self_action, state_to_features(new_game_state), reward))
 
-    old_state_features = torch.tensor(state_to_features(old_game_state), dtype=torch.float32).unsqueeze(0)  # Add batch dimension
+    reward = reward_from_events(self, events)
+    self.transitions.append(
+        Transition(state_to_features(old_game_state), self_action, state_to_features(new_game_state), reward))
+
+    # Add batch dimension
+    old_state_features = torch.tensor(state_to_features(old_game_state), dtype=torch.float32).unsqueeze(0)
     new_state_features = torch.tensor(state_to_features(new_game_state), dtype=torch.float32).unsqueeze(0)
 
     q_values_old = self.model(old_state_features)
     q_values_new = self.model(new_state_features)
     max_q_new = torch.max(q_values_new).detach()  # Max Q-value for the next state
-
+    print(q_values_old)
     # Calculate target Q-value using Q-learning update
     target_q_value = reward + self.discount_factor * max_q_new
 
@@ -106,9 +106,7 @@ def game_events_occurred(self, old_game_state: dict, self_action: str, new_game_
     self.optimizer.zero_grad()
     loss.backward()
     self.optimizer.step()
-    
 
-    
 
 def end_of_round(self, last_game_state: dict, last_action: str, events: List[str]):
     """
@@ -124,7 +122,8 @@ def end_of_round(self, last_game_state: dict, last_action: str, events: List[str
     :param self: The same object that is passed to all of your callbacks.
     """
     self.logger.debug(f'Encountered event(s) {", ".join(map(repr, events))} in final step')
-    self.transitions.append(Transition(state_to_features(last_game_state), last_action, None, reward_from_events(self, events)))
+    self.transitions.append(
+        Transition(state_to_features(last_game_state), last_action, None, reward_from_events(self, events)))
 
     # Store the model
     # with open("my-saved-model.pt", "wb") as file:
@@ -132,8 +131,7 @@ def end_of_round(self, last_game_state: dict, last_action: str, events: List[str
 
     # Calculate reward from events
     reward = reward_from_events(self, events)
-    torch.save(self.model, 'custom_mlp_model.pb')
-    
+    torch.save(self.model, 'custom_mlp_model.pth')
 
 
 def reward_from_events(self, events: List[str]) -> int:
@@ -143,11 +141,11 @@ def reward_from_events(self, events: List[str]) -> int:
     Here you can modify the rewards your agent get so as to en/discourage
     certain behavior.
     """
-#       Kill a player 100
-#       Break a wall 30
-#       Perform action -1
-#       Perform impossible action -2
-#       Die -300
+    #       Kill a player 100
+    #       Break a wall 30
+    #       Perform action -1
+    #       Perform impossible action -2
+    #       Die -300
     game_rewards = {
         e.COIN_COLLECTED: 50,
         e.CRATE_DESTROYED: 30,
@@ -155,7 +153,7 @@ def reward_from_events(self, events: List[str]) -> int:
         e.KILLED_OPPONENT: 100,
         e.GOT_KILLED: -300
     }
-    
+
     reward_sum = 0
     for event in events:
         if event in game_rewards:

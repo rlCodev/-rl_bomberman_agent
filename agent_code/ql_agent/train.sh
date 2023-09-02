@@ -12,8 +12,8 @@ n=$1
 # Loop 'n' times and call the Python script
 for ((i=1; i<=$n; i++)); do
     echo "Running iteration $i"
-    python main.py play --agents ql_agent --train 1 --no-gui
+    python ../../main.py play --agents ql_agent --train 1 --no-gui
 done
 
-# Call this to train model: chmod +x run_multiple_times.sh
-# ./run_multiple_times.sh 100
+# Call this to train model: chmod +x traub.sh
+# ./train.sh 100
