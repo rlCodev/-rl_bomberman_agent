@@ -33,7 +33,7 @@ def setup(self):
     hidden_size = 100
     output_size = len(ACTIONS)
 
-    if not os.path.isfile("custom_mlp_model.pth"):
+    if not os.path.isfile("custom_mlp_model.pb"):
         # Size of feature representation below
         self.model = CustomMLP(input_size, hidden_size, output_size)
     else:
@@ -42,7 +42,7 @@ def setup(self):
         self.model = CustomMLP(input_size, hidden_size, output_size)
 
         # Load the saved model state dictionary
-        self.model.load_state_dict(torch.load('custom_mlp_model.pth'))
+        self.model = torch.load('custom_mlp_model.pb')
 
 
 def act(self, game_state: dict) -> str:
@@ -75,7 +75,7 @@ def act(self, game_state: dict) -> str:
         # 80%: walk in any direction. 10% wait. 10% bomb.
         return np.random.choice(ACTIONS, p=[.2, .2, .2, .2, .1, .1])
     else:
-        state = torch.tensor(state_to_features(game_state), dtype=torch.float32)  # Add batch dimension
+        state = torch.tensor(state_to_features(game_state), dtype=torch.float32).unsqueeze(0)  # Add batch dimension
         q_values = self.model(state)
         action_index = torch.argmax(q_values).item()
         chosen_action = ACTIONS[action_index]

@@ -49,7 +49,7 @@ def setup_training(self):
     self.learning_rate = LEARNING_RATE
     self.num_episodes = NUM_EPISODES
 
-    self.exploration_rate = 1
+    self.exploration_rate = 0.9
     self.exploration_rate_decay = 0.99999975
     self.exploration_rate_min = 0.1
 
@@ -88,8 +88,8 @@ def game_events_occurred(self, old_game_state: dict, self_action: str, new_game_
     reward = reward_from_events(self, events)
     self.transitions.append(Transition(state_to_features(old_game_state), self_action, state_to_features(new_game_state), reward))
 
-    old_state_features = torch.tensor(state_to_features(old_game_state), dtype=torch.float32)
-    new_state_features = torch.tensor(state_to_features(new_game_state), dtype=torch.float32)
+    old_state_features = torch.tensor(state_to_features(old_game_state), dtype=torch.float32).unsqueeze(0)  # Add batch dimension
+    new_state_features = torch.tensor(state_to_features(new_game_state), dtype=torch.float32).unsqueeze(0)
 
     q_values_old = self.model(old_state_features)
     q_values_new = self.model(new_state_features)
@@ -100,7 +100,7 @@ def game_events_occurred(self, old_game_state: dict, self_action: str, new_game_
 
     # Compute the loss
     action_index = ACTIONS.index(self_action)
-    loss = self.loss_function(q_values_old[action_index], target_q_value)
+    loss = self.loss_function(q_values_old[0][action_index], target_q_value)
 
     # Backpropagation and optimization
     self.optimizer.zero_grad()
@@ -132,7 +132,7 @@ def end_of_round(self, last_game_state: dict, last_action: str, events: List[str
 
     # Calculate reward from events
     reward = reward_from_events(self, events)
-    torch.save(self.model.state_dict(), 'custom_mlp_model.pth')
+    torch.save(self.model, 'custom_mlp_model.pb')
     
 
 
