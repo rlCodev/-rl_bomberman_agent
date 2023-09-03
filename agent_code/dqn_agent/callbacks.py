@@ -1,10 +1,15 @@
 import os
-from .MLP import CustomMLP
+import random
+from .DQN import DQN
 import numpy as np
 import torch
-
+from gymnasium.spaces import Discrete
+from .utils import action_index_to_string, action_string_to_index
 
 ACTIONS = ['UP', 'RIGHT', 'DOWN', 'LEFT', 'WAIT', 'BOMB']
+
+# Create a custom Discrete action space
+action_space = Discrete(len(ACTIONS))
 
 
 def setup(self):
@@ -30,19 +35,19 @@ def setup(self):
     #     with open("my-saved-model.pt", "rb") as file:
     #         self.model = pickle.load(file)
     input_size = 1445
-    hidden_size = 100
+    hidden_size = 128
     output_size = len(ACTIONS)
 
-    if not os.path.isfile("custom_mlp_model.pth"):
+    if not os.path.isfile("custom_mlp_model.pth") and not self.train:
         # Size of feature representation below
-        self.model = CustomMLP(input_size, hidden_size, output_size)
-    else:
+        self.policy_net = DQN(input_size, hidden_size, output_size)
+    elif os.path.isfile("custom_mlp_model.pth") and not self.train:
         self.logger.info("Loading MLP from saved state.")
         # Create an instance of the custom MLP model
-        self.model = CustomMLP(input_size, hidden_size, output_size)
+        self.policy_net = DQN(input_size, hidden_size, output_size)
 
         # Load the saved model state dictionary
-        self.model = torch.load('custom_mlp_model.pth')
+        self.policy_net = torch.load('custom_mlp_model.pth')
 
 def act(self, game_state: dict) -> str:
     """
@@ -65,21 +70,26 @@ def act(self, game_state: dict) -> str:
     #     'coins': [coin.get_state() for coin in self.coins if coin.collectable],
     #     'user_input': self.user_input,
     # }
-    if self.model is None:
-        state_space_size = state_to_features(game_state).shape[0]
-        self.model = CustomMLP(state_space_size, 100, len(ACTIONS))  # Initialize the custom MLP model
 
-    if self.train and np.random.rand() < self.exploration_rate:
+    if self.train and random.random() < self.eps_threshold:
         self.logger.debug("Choosing action purely at random.")
         # 80%: walk in any direction. 10% wait. 10% bomb.
         return np.random.choice(ACTIONS, p=[.2, .2, .2, .2, .1, .1])
     else:
-        state = torch.tensor(state_to_features(game_state), dtype=torch.float32).unsqueeze(0)  # Add batch dimension
-        q_values = self.model(state)
-        action_index = torch.argmax(q_values).item()
-        chosen_action = ACTIONS[action_index]
-        self.logger.info(f'Taking action: {chosen_action}')
-        return chosen_action
+        with torch.no_grad():
+            state = torch.tensor(state_to_features(game_state), dtype=torch.float32).unsqueeze(0)  # Add batch dimension
+            prediction = self.policy_net(state).max(1)[1].view(1, 1).item()
+            chosen_action = action_index_to_string(prediction)
+            
+            # action_index = self.policy_net(state).argmax().item()
+            # print(action_index)
+            # chosen_action = ACTIONS[action_index]
+            
+            # q_values = self.model(state)
+            # action_index = torch.argmax(q_values).item()
+            # chosen_action = ACTIONS[action_index]
+            self.logger.info(f'Taking action: {chosen_action}')
+            return chosen_action
     
 
 
