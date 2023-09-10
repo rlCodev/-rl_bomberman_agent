@@ -10,7 +10,7 @@ from .callbacks import state_to_features
 import numpy as np
 from torch import nn
 from torch.optim import AdamW, SGD
-from .DQN import DQN
+from .MLP import MLP
 import random
 from .utils import action_index_to_string, action_string_to_index
 
@@ -34,7 +34,7 @@ Transition = namedtuple('Transition',
                         ('state', 'action', 'next_state', 'reward'))
 
 # Hyper parameters -- TODO modify/optimize
-TRANSITION_HISTORY_SIZE = 3  # keep only ... last transitions
+TRANSITION_HISTORY_SIZE = 200  # keep only ... last transitions
 RECORD_ENEMY_TRANSITIONS = 1.0  # record enemy transitions with probability ...
 
 # BATCH_SIZE is the number of transitions sampled from the replay buffer
@@ -44,19 +44,20 @@ RECORD_ENEMY_TRANSITIONS = 1.0  # record enemy transitions with probability ...
 # EPS_DECAY controls the rate of exponential decay of epsilon, higher means a slower decay
 # TAU is the update rate of the target network
 # LEARNING_RATE is the learning rate of the ``AdamW`` optimizer
-BATCH_SIZE = 128
+BATCH_SIZE = 32
+# Discound factor or gamma
 DISCOUNT_FACTOR = 0.99
-EPS_START = 0.9
-EPS_END = 0.05
-EPS_DECAY_FACTOR = 1000
-TAU = 0.005
-LEARNING_RATE = 1e-6
+EPS_START = 0.99
+EPS_END = 0.1
+STATIC_EPS = 0.5
+EPS_DECAY_FACTOR = 1000000
+TAU = 0.0001
+LEARNING_RATE = 0.0001
 
 ACTIONS = ['UP', 'RIGHT', 'DOWN', 'LEFT', 'WAIT', 'BOMB']
 
 # Events
 PLACEHOLDER_EVENT = "PLACEHOLDER"
-BATCH_SIZE = 40
 
 
 def setup_training(self):
@@ -67,9 +68,6 @@ def setup_training(self):
 
     :param self: This object is passed to all callbacks and you can set arbitrary values.
     """
-    # Example: Set up an array that will note transition tuples
-    # (s, a, r, s')
-    self.transitions = deque(maxlen=TRANSITION_HISTORY_SIZE)
 
     # Use SGD optimizer and Mean Squared Error loss function
     # self.optimizer = SGD(self.model.parameters(), lr=self.learning_rate)
@@ -80,13 +78,15 @@ def setup_training(self):
     input_size = 1445
     hidden_size = 128
     output_size = len(ACTIONS)
-    self.policy_net = DQN(input_size, hidden_size, output_size)
-    self.target_net = DQN(input_size, hidden_size, output_size)
-    if os.path.isfile("custom_mlp_model.pth"):
-        self.policy_net = torch.load('custom_mlp_model.pth')
+    self.policy_net = MLP(input_size, hidden_size, output_size)
+    self.target_net = MLP(input_size, hidden_size, output_size)
+    if os.path.isfile("custom_mlp_policy_model.pth"):
+        self.policy_net = torch.load('custom_mlp_policy_model.pth')
+        self.target_net = torch.load('custom_mlp_target_model.pth')
     self.steps_done = 0
-    self.eps_threshold = EPS_END + (EPS_START - EPS_END) * \
-        math.exp(-1. * self.steps_done / EPS_DECAY_FACTOR)
+    # self.eps_threshold = EPS_END + (EPS_START - EPS_END) * \
+    #     math.exp(-1. * self.steps_done / EPS_DECAY_FACTOR)
+    self.eps_threshold = STATIC_EPS
     # Load episodes from file
     self.episode_durations = []
     if os.path.isfile("training_episodes.pkl"):
@@ -94,7 +94,11 @@ def setup_training(self):
             eps_dur = pickle.load(f)
             if len(eps_dur) > 0:
                 self.episode_durations = eps_dur
-    self.memory = ReplayMemory(10000)
+    print(self.episode_durations)
+    self.episodes_round = 0
+    self.logger.info(f"Loaded {len(self.episode_durations)} training episodes from file")
+    self.logger.info(f"Current epsilon threshold: {self.eps_threshold}")
+    self.memory = ReplayMemory(TRANSITION_HISTORY_SIZE)
     self.t = 0
 
 def game_events_occurred(self, old_game_state: dict, self_action: str, new_game_state: dict, events: List[str]):
@@ -124,10 +128,10 @@ def game_events_occurred(self, old_game_state: dict, self_action: str, new_game_
     reward = torch.tensor([rewards])
     action = torch.tensor([[action_string_to_index(self_action)]], dtype=torch.long)
     self.memory.push(old_game_state_feature, action, new_game_state_feature, reward)
-    
-    self.eps_threshold = EPS_END + (EPS_START - EPS_END) * \
-        math.exp(-1. * self.steps_done / EPS_DECAY_FACTOR)
-    self.steps_done += 1
+    self.episodes_round += 1
+    # self.eps_threshold = EPS_END + (EPS_START - EPS_END) * \
+    #     math.exp(-1. * self.steps_done / EPS_DECAY_FACTOR)
+    # self.steps_done += 1
 
     update_model(self)
 
@@ -174,13 +178,21 @@ def end_of_round(self, last_game_state: dict, last_action: str, events: List[str
 
     # Update the model
     update_model(self)
-    self.episode_durations.append(len(self.memory))
-    # plot_durations(self)
+    self.episode_durations.append(self.episodes_round)
+    self.episodes_round = 0
+    # Only plot every 20 episodes
+    # if len(self.episode_durations) % 100 == 0:
+    plot_durations(self)
     # Save model to file
-    torch.save(self.policy_net, 'custom_mlp_model.pth')
+    torch.save(self.policy_net, 'custom_mlp_policy_model.pth')
+    torch.save(self.target_net, 'custom_mlp_target_model.pth')
     # Save current training episodes to file
     with open('training_episodes.pkl', 'wb') as f:
         pickle.dump(self.episode_durations, f)
+
+    # Update epsilon threshold for new round
+    # self.eps_threshold = EPS_END + (EPS_START - EPS_END) * \
+    #     math.exp(-1. * self.steps_done / EPS_DECAY_FACTOR)
 
 
 def reward_from_events(self, events: List[str]) -> int:
@@ -196,12 +208,12 @@ def reward_from_events(self, events: List[str]) -> int:
     #       Perform impossible action -2
     #       Die -300
     game_rewards = {
-        e.COIN_COLLECTED: 50,
-        e.CRATE_DESTROYED: 30,
-        e.INVALID_ACTION: -50,
-        e.KILLED_OPPONENT: 100,
+        e.COIN_COLLECTED: 300,
+        e.CRATE_DESTROYED: 3,
+        e.INVALID_ACTION: -5,
+        e.KILLED_OPPONENT: 10,
         e.GOT_KILLED: -300,
-        e.WAITED: -50
+        e.WAITED: -5
     }
 
     reward_sum = 0

@@ -11,9 +11,9 @@
                 "play",
                 "--agents",
                 "ql_agent",
-                "--train",
-                "1",
-                "--no-gui"
+                "random_agent",
+                "rule_based_agent",
+                "coin_collector_agent",
             ],
             "justMyCode": true
         }

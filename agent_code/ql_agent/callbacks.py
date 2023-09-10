@@ -1,6 +1,6 @@
 import os
 import random
-from .DQN import DQN
+from .MLP import MLP
 import numpy as np
 import torch
 from gymnasium.spaces import Discrete
@@ -38,16 +38,16 @@ def setup(self):
     hidden_size = 128
     output_size = len(ACTIONS)
 
-    if not os.path.isfile("custom_mlp_model.pth") and not self.train:
+    if not os.path.isfile("custom_mlp_policy_model.pth") and not self.train:
         # Size of feature representation below
-        self.policy_net = DQN(input_size, hidden_size, output_size)
-    elif os.path.isfile("custom_mlp_model.pth") and not self.train:
+        self.policy_net = MLP(input_size, hidden_size, output_size)
+    elif os.path.isfile("custom_mlp_policy_model.pth") and not self.train:
         self.logger.info("Loading MLP from saved state.")
         # Create an instance of the custom MLP model
-        self.policy_net = DQN(input_size, hidden_size, output_size)
+        self.policy_net = MLP(input_size, hidden_size, output_size)
 
         # Load the saved model state dictionary
-        self.policy_net = torch.load('custom_mlp_model.pth')
+        self.policy_net = torch.load('custom_mlp_policy_model.pth')
 
 def act(self, game_state: dict) -> str:
     """
@@ -72,9 +72,9 @@ def act(self, game_state: dict) -> str:
     # }
 
     if self.train and random.random() < self.eps_threshold:
-        self.logger.debug("Choosing action purely at random.")
+        self.logger.debug("Random action.")
         # 80%: walk in any direction. 10% wait. 10% bomb.
-        return np.random.choice(ACTIONS, p=[.2, .2, .2, .2, .1, .1])
+        return np.random.choice(ACTIONS, p=[.2, .2, .2, .2, .199, .001])
     else:
         with torch.no_grad():
             state = torch.tensor(state_to_features(game_state), dtype=torch.float32).unsqueeze(0)  # Add batch dimension
@@ -88,7 +88,7 @@ def act(self, game_state: dict) -> str:
             # q_values = self.model(state)
             # action_index = torch.argmax(q_values).item()
             # chosen_action = ACTIONS[action_index]
-            self.logger.info(f'Taking action: {chosen_action}')
+            self.logger.info(f'Predicted action: {chosen_action}')
             return chosen_action
     
 
