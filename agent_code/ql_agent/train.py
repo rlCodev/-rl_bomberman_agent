@@ -49,7 +49,7 @@ BATCH_SIZE = 32
 DISCOUNT_FACTOR = 0.99
 EPS_START = 0.99
 EPS_END = 0.1
-STATIC_EPS = 0.5
+STATIC_EPS = 0.1
 EPS_DECAY_FACTOR = 1000000
 TAU = 0.0001
 LEARNING_RATE = 0.0001
@@ -84,9 +84,9 @@ def setup_training(self):
         self.policy_net = torch.load('custom_mlp_policy_model.pth')
         self.target_net = torch.load('custom_mlp_target_model.pth')
     self.steps_done = 0
-    # self.eps_threshold = EPS_END + (EPS_START - EPS_END) * \
-    #     math.exp(-1. * self.steps_done / EPS_DECAY_FACTOR)
-    self.eps_threshold = STATIC_EPS
+    self.eps_threshold = EPS_END + (EPS_START - EPS_END) * \
+        math.exp(-1. * self.steps_done / EPS_DECAY_FACTOR)
+    # self.eps_threshold = STATIC_EPS
     # Load episodes from file
     self.episode_durations = []
     if os.path.isfile("training_episodes.pkl"):
@@ -123,17 +123,17 @@ def game_events_occurred(self, old_game_state: dict, self_action: str, new_game_
     # new_game_state_feature = state_to_features(new_game_state)
     old_game_state_feature = torch.tensor(state_to_features(old_game_state), dtype=torch.float32).unsqueeze(0)
     new_game_state_feature = torch.tensor(state_to_features(new_game_state), dtype=torch.float32).unsqueeze(0)
-    rewards = reward_from_events(self, events)
+    rewards = reward_from_events(self, events, new_game_state)
     # Put rewards into tensor
     reward = torch.tensor([rewards])
     action = torch.tensor([[action_string_to_index(self_action)]], dtype=torch.long)
     self.memory.push(old_game_state_feature, action, new_game_state_feature, reward)
     self.episodes_round += 1
-    # self.eps_threshold = EPS_END + (EPS_START - EPS_END) * \
-    #     math.exp(-1. * self.steps_done / EPS_DECAY_FACTOR)
-    # self.steps_done += 1
+    self.eps_threshold = EPS_END + (EPS_START - EPS_END) * \
+        math.exp(-1. * self.steps_done / EPS_DECAY_FACTOR)
+    self.steps_done += 1
 
-    update_model(self)
+    # update_model(self)
 
 
     target_net_state_dict = self.target_net.state_dict()
@@ -191,11 +191,11 @@ def end_of_round(self, last_game_state: dict, last_action: str, events: List[str
         pickle.dump(self.episode_durations, f)
 
     # Update epsilon threshold for new round
-    # self.eps_threshold = EPS_END + (EPS_START - EPS_END) * \
-    #     math.exp(-1. * self.steps_done / EPS_DECAY_FACTOR)
+    self.eps_threshold = EPS_END + (EPS_START - EPS_END) * \
+        math.exp(-1. * self.steps_done / EPS_DECAY_FACTOR)
 
 
-def reward_from_events(self, events: List[str]) -> int:
+def reward_from_events(self, events: List[str], new_game_state) -> int:
     """
     *This is not a required function, but an idea to structure your code.*
 
@@ -209,17 +209,25 @@ def reward_from_events(self, events: List[str]) -> int:
     #       Die -300
     game_rewards = {
         e.COIN_COLLECTED: 300,
-        e.CRATE_DESTROYED: 3,
-        e.INVALID_ACTION: -5,
-        e.KILLED_OPPONENT: 10,
+        e.CRATE_DESTROYED: 30,
+        e.INVALID_ACTION: -2,
+        e.KILLED_OPPONENT: 100,
         e.GOT_KILLED: -300,
-        e.WAITED: -5
+        e.KILLED_SELF: -300,
+        e.WAITED: -5,
+        e.MOVED_DOWN: -1,
+        e.MOVED_LEFT: -1,
+        e.MOVED_RIGHT: -1,
+        e.MOVED_UP: -1,
+        e.BOMB_DROPPED: 1
     }
 
     reward_sum = 0
     for event in events:
         if event in game_rewards:
             reward_sum += game_rewards[event]
+    # TODO: Check if agent in danger zone
+
     self.logger.info(f"Awarded {reward_sum} for events {', '.join(events)}")
     return reward_sum
 
