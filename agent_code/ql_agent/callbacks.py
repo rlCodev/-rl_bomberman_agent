@@ -3,14 +3,9 @@ import random
 from .MLP import MLP
 import numpy as np
 import torch
-from gymnasium.spaces import Discrete
 from .utils import action_index_to_string, action_string_to_index
 
 ACTIONS = ['UP', 'RIGHT', 'DOWN', 'LEFT', 'WAIT', 'BOMB']
-
-# Create a custom Discrete action space
-action_space = Discrete(len(ACTIONS))
-
 
 def setup(self):
     """
@@ -40,16 +35,16 @@ def setup(self):
 
     if not os.path.isfile("custom_mlp_policy_model.pth") and not self.train:
         # Size of feature representation below
-        self.policy_net = MLP(input_size, hidden_size, output_size)
+        self.model = MLP(input_size, hidden_size, output_size)
     elif os.path.isfile("custom_mlp_policy_model.pth") and not self.train:
         self.logger.info("Loading MLP from saved state.")
         # Create an instance of the custom MLP model
-        self.policy_net = MLP(input_size, hidden_size, output_size)
+        self.model = MLP(input_size, hidden_size, output_size)
 
         # Load the saved model state dictionary
         # self.policy_net = torch.load('custom_mlp_policy_model.pth')
         # Load the saved model state dictionary
-        self.policy_net.load_state_dict(torch.load('custom_mlp_policy_model.pth'))
+        self.model.load_state_dict(torch.load('custom_mlp_policy_model.pth'))
 
 def act(self, game_state: dict) -> str:
     """
@@ -80,7 +75,7 @@ def act(self, game_state: dict) -> str:
     else:
         with torch.no_grad():
             state = torch.tensor(state_to_features(game_state), dtype=torch.float32).unsqueeze(0)  # Add batch dimension
-            prediction = self.policy_net(state).max(1)[1].view(1, 1).item()
+            prediction = self.model(state).max(1)[1].view(1, 1).item()
             chosen_action = action_index_to_string(prediction)
             
             # action_index = self.policy_net(state).argmax().item()
