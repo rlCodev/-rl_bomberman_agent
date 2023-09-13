@@ -47,7 +47,9 @@ def setup(self):
         self.policy_net = MLP(input_size, hidden_size, output_size)
 
         # Load the saved model state dictionary
-        self.policy_net = torch.load('custom_mlp_policy_model.pth')
+        # self.policy_net = torch.load('custom_mlp_policy_model.pth')
+        # Load the saved model state dictionary
+        self.policy_net.load_state_dict(torch.load('custom_mlp_policy_model.pth'))
 
 def act(self, game_state: dict) -> str:
     """

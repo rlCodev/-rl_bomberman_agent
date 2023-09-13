@@ -34,7 +34,7 @@ Transition = namedtuple('Transition',
                         ('state', 'action', 'next_state', 'reward'))
 
 # Hyper parameters -- TODO modify/optimize
-TRANSITION_HISTORY_SIZE = 100  # keep only ... last transitions
+TRANSITION_HISTORY_SIZE = 20  # keep only ... last transitions
 RECORD_ENEMY_TRANSITIONS = 1.0  # record enemy transitions with probability ...
 
 # BATCH_SIZE is the number of transitions sampled from the replay buffer
@@ -44,15 +44,15 @@ RECORD_ENEMY_TRANSITIONS = 1.0  # record enemy transitions with probability ...
 # EPS_DECAY controls the rate of exponential decay of epsilon, higher means a slower decay
 # TAU is the update rate of the target network
 # LEARNING_RATE is the learning rate of the ``AdamW`` optimizer
-BATCH_SIZE = 32
+BATCH_SIZE = 12
 # Discound factor or gamma
 DISCOUNT_FACTOR = 0.99
 EPS_START = 0.99
-EPS_END = 0.1
+EPS_END = 0.4
 STATIC_EPS = 0.1
 EPS_DECAY_FACTOR = 1000000
-TAU = 0.01
-LEARNING_RATE = 0.001
+TAU = 0.001
+LEARNING_RATE = 0.0001
 
 ACTIONS = ['UP', 'RIGHT', 'DOWN', 'LEFT', 'WAIT', 'BOMB']
 
@@ -81,8 +81,10 @@ def setup_training(self):
     self.policy_net = MLP(input_size, hidden_size, output_size)
     self.target_net = MLP(input_size, hidden_size, output_size)
     if os.path.isfile("custom_mlp_policy_model.pth"):
-        self.policy_net = torch.load('custom_mlp_policy_model.pth')
-        self.target_net = torch.load('custom_mlp_target_model.pth')
+        self.policy_net.load_state_dict(torch.load('custom_mlp_policy_model.pth'))
+        self.target_net.load_state_dict(torch.load('custom_mlp_target_model.pth'))
+        # self.policy_net = torch.load('custom_mlp_policy_model.pth')
+        # self.target_net = torch.load('custom_mlp_target_model.pth')
     self.steps_done = 0
     self.eps_threshold = EPS_END + (EPS_START - EPS_END) * \
         math.exp(-1. * self.steps_done / EPS_DECAY_FACTOR)
@@ -94,7 +96,6 @@ def setup_training(self):
             eps_dur = pickle.load(f)
             if len(eps_dur) > 0:
                 self.episode_durations = eps_dur
-    print(self.episode_durations)
     self.episodes_round = 0
     self.logger.info(f"Loaded {len(self.episode_durations)} training episodes from file")
     self.logger.info(f"Current epsilon threshold: {self.eps_threshold}")
@@ -132,8 +133,9 @@ def game_events_occurred(self, old_game_state: dict, self_action: str, new_game_
     self.eps_threshold = EPS_END + (EPS_START - EPS_END) * \
         math.exp(-1. * self.steps_done / EPS_DECAY_FACTOR)
     self.steps_done += 1
+    # print("Rewards: ", reward)
 
-    # update_model(self)
+    update_model(self)
 
     # # Idea: Add your own events to hand out rewards
     # if ...:
@@ -168,7 +170,7 @@ def end_of_round(self, last_game_state: dict, last_action: str, events: List[str
     action = torch.tensor([[action_string_to_index(last_action)]], dtype=torch.long)
     self.memory.push(last_game_state_feature, action, None, reward)
     # Translate events to a list of integers
-
+    # print("Rewards: ", reward)
     # Update the model
     update_model(self)
     self.episode_durations.append(self.episodes_round)
@@ -177,12 +179,15 @@ def end_of_round(self, last_game_state: dict, last_action: str, events: List[str
     # if len(self.episode_durations) % 100 == 0:
     plot_durations(self)
     # Save model to file
-    torch.save(self.policy_net, 'custom_mlp_policy_model.pth')
-    torch.save(self.target_net, 'custom_mlp_target_model.pth')
+    # torch.save(self.policy_net, 'custom_mlp_policy_model.pth')
+    torch.save(self.policy_net.state_dict(), 'custom_mlp_policy_model.pth')
+    # torch.save(self.target_net, 'custom_mlp_target_model.pth')
+    torch.save(self.target_net.state_dict(), 'custom_mlp_target_model.pth')
     # Save current training episodes to file
     with open('training_episodes.pkl', 'wb') as f:
         pickle.dump(self.episode_durations, f)
-
+    # Clean memory after each round for preventing memory leakage
+    self.memory = ReplayMemory(TRANSITION_HISTORY_SIZE)
     # Update epsilon threshold for new round
     self.eps_threshold = EPS_END + (EPS_START - EPS_END) * \
         math.exp(-1. * self.steps_done / EPS_DECAY_FACTOR)
@@ -294,6 +299,8 @@ def update_model(self):
     criterion = nn.SmoothL1Loss()
     loss = criterion(state_action_values, expected_state_action_values.unsqueeze(1))
     self.losses.append(loss)
+
+    print(f"Episode {len(self.episode_durations)} Loss: {loss.detach().numpy().item()}")
     # Optimize the model
     self.optimizer.zero_grad()
     loss.backward()
@@ -341,7 +348,7 @@ def plot_durations(self, show_result=False):
         means = durations_t.unfold(0, 100, 1).mean(1).view(-1)
         means = torch.cat((torch.zeros(99), means))
         plt.plot(means.numpy())
-
+    
     plt.pause(0.001)  # pause a bit so that plots are updated
     # Save plot to file
     plt.savefig('./plots/training_plot.png')
