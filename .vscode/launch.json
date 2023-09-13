@@ -11,13 +11,13 @@
                 "play",
                 "--agents",
                 "ql_agent",
-                //"--train",
-                //"1",
+                "--train",
+                "1",
                 "--scenario",
                 "coin-heaven",
-                // "--no-gui",
-                // "--n-rounds",
-                // "200"
+                "--no-gui",
+                "--n-rounds",
+                "2000"
             ],
             "justMyCode": true
         }

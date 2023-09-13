@@ -32,7 +32,7 @@ RECORD_ENEMY_TRANSITIONS = 1.0  # record enemy transitions with probability ...
 BATCH_SIZE = 12
 # Discound factor or gamma
 DISCOUNT_FACTOR = 0.9
-NUMBER_EPISODE = 200
+NUMBER_EPISODE = 2000
 EPS_START = 0.9
 EPS_END = 0.2
 STATIC_EPS = 0.1
@@ -188,22 +188,22 @@ def reward_from_events(self, events: List[str], new_game_state) -> int:
     #       Perform impossible action -2
     #       Die -300
     game_rewards = {
-        e.COIN_COLLECTED: 100,
-        e.CRATE_DESTROYED: 0,
-        e.INVALID_ACTION: 0,
-        e.KILLED_OPPONENT: 0,
-        e.GOT_KILLED: 0,
-        e.KILLED_SELF: 0,
+        e.COIN_COLLECTED: 200,
+        e.CRATE_DESTROYED: 30,
+        e.INVALID_ACTION: -2,
+        e.KILLED_OPPONENT: 100,
+        e.GOT_KILLED: -200,
+        e.KILLED_SELF: -100,
         e.BOMB_DROPPED: 0,
-        e.SURVIVED_ROUND: 0,
+        # e.SURVIVED_ROUND: 200,
     }
 
     made_action = {
-        e.MOVED_LEFT: 0,
-        e.MOVED_RIGHT: 0,
-        e.MOVED_UP: 0,
-        e.MOVED_DOWN: 0,
-        e.WAITED: 0,
+        e.MOVED_LEFT: -1,
+        e.MOVED_RIGHT: -1,
+        e.MOVED_UP: -1,
+        e.MOVED_DOWN: -1,
+        e.WAITED: -1,
     }
 
     reward_sum = 0

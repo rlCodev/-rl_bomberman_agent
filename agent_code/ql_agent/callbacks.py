@@ -71,7 +71,7 @@ def act(self, game_state: dict) -> str:
     if self.train and random.random() < self.eps_threshold:
         self.logger.debug("Random action.")
         # 80%: walk in any direction. 10% wait. 10% bomb.
-        return np.random.choice(ACTIONS, p=[.2, .2, .2, .2, .199, .001])
+        return np.random.choice(ACTIONS, p=[0.22, 0.22, 0.22, 0.22, 0.06, 0.06])
     else:
         with torch.no_grad():
             state = torch.tensor(state_to_features(game_state), dtype=torch.float32).unsqueeze(0)  # Add batch dimension
@@ -140,7 +140,7 @@ def state_to_features(game_state: dict) -> np.array:
         for bomb in bombs:
             # Relative time to detnation remaining. After dropping a bomb it takes 4 time steps t to detonate.
             # Negative for own and positive for others bombs is not possible from this feature space.
-            danger_level = 4-bomb[1]/4
+            danger_level = 4-bomb[1]
             # TODO: Add danger level to all cells in blast radius
             width = len(gamestate_2d)
             height = len(gamestate_2d[0])
@@ -148,21 +148,21 @@ def state_to_features(game_state: dict) -> np.array:
             pos_y = bomb[0][1]
             top, down, left, right = True, True, True, True
             gamestate_2d[pos_x][pos_y][3] = danger_level
-            for i in range(1,3):    
+            for i in range(1,4):    
                 if  right and pos_x+i <width and gamestate_2d[pos_x+i][pos_y][0] == 0:
-                    gamestate_2d[pos_x+i][pos_y][3] = danger_level
+                    gamestate_2d[pos_x+i][pos_y][4] = danger_level
                 else:
                     right = False    
                 if  left and pos_x-i >= 0 and gamestate_2d[pos_x-i][pos_y][0] == 0:
-                    gamestate_2d[pos_x-i][pos_y][3] = danger_level
+                    gamestate_2d[pos_x-i][pos_y][4] = danger_level
                 else:
                     left = False
                 if  down and pos_y + 1 < height and gamestate_2d[pos_x][pos_y+i][0] == 0:
-                    gamestate_2d[pos_x][pos_y+i][3] = danger_level
+                    gamestate_2d[pos_x][pos_y+i][4] = danger_level
                 else:
                     down = False
                 if  top and pos_y - 1 >= 0 and gamestate_2d[pos_x][pos_y-i][0] == 0:
-                    gamestate_2d[pos_x][pos_y-i][3] = danger_level
+                    gamestate_2d[pos_x][pos_y-i][4] = danger_level
                 else:
                     top = False
                 
@@ -170,13 +170,33 @@ def state_to_features(game_state: dict) -> np.array:
             # gamestate_2d[bomb[0][0]-3:bomb[0][0]+3][bomb[0][1]][3] = danger_level
             # gamestate_2d[bomb[0][0]][bomb[0][1]-3:bomb[0][1]+3][3] = danger_level
     else:
-        danger_level = 4 - bombs[1]/4
-        gamestate_2d[bombs[0]][bombs[1]][3] = danger_level
+        danger_level = 4 - bombs[1]
+        gamestate_2d[bomb[0][0]][bomb[0][1]][4] = danger_level
 
     # TODO: add explosion map
 
-    
+    # if(bombs != []):
+    #     gamestate2D_to_outputMap(gamestate_2d)
+    #     x = 1
     # Stack all  and reshape into a vector
     stacked_channels = np.stack(gamestate_2d)
     gamestate_one_hot = stacked_channels.reshape(-1)
     return gamestate_one_hot
+
+def gamestate2D_to_outputMap(gamestate_2d):
+    print()
+    gamestate_mock_ui = [['.' for value in row] for row in gamestate_2d]
+    for i in range(len(gamestate_2d)):
+        for j in range(len(gamestate_2d[0])):
+            if(gamestate_2d[i][j][0] == -1):
+                gamestate_mock_ui[i][j] = "#"
+            elif(gamestate_2d[i][j][0] == 1):
+                gamestate_mock_ui[i][j] = "X"
+            if(gamestate_2d[i][j][3] == 1):
+                gamestate_mock_ui[i][j] = "O"
+            if(gamestate_2d[i][j][4] != 0):
+                gamestate_mock_ui[i][j] = str(gamestate_2d[i][j][4])
+            if(gamestate_2d[i][j][1] == 1):
+                gamestate_mock_ui[i][j] = "S"
+        print(gamestate_mock_ui[i])
+    print("-----------------")
