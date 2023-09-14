@@ -32,9 +32,9 @@ RECORD_ENEMY_TRANSITIONS = 1.0  # record enemy transitions with probability ...
 BATCH_SIZE = 12
 # Discound factor or gamma
 DISCOUNT_FACTOR = 0.9
-NUMBER_EPISODE = 2000
-EPS_START = 0.9
-EPS_END = 0.2
+NUMBER_EPISODE = 500
+EPS_START = 0.001
+EPS_END = 0.0
 STATIC_EPS = 0.1
 EPS_DECAY_FACTOR = 10000
 TAU = 0.001
@@ -61,7 +61,7 @@ def setup_training(self):
     self.losses = []
 
     # Setup models
-    input_size = 1445
+    input_size = 867
     hidden_size = 128
     output_size = len(ACTIONS)
     self.model = MLP(input_size, hidden_size, output_size)
@@ -111,8 +111,6 @@ def game_events_occurred(self, old_game_state: dict, self_action: str, new_game_
     action = torch.tensor([[action_string_to_index(self_action)]], dtype=torch.long)
 
     self.episodes_round += 1
-    self.eps_threshold = EPS_END + (EPS_START - EPS_END) * \
-        math.exp(-1. * self.steps_done / EPS_DECAY_FACTOR)
     self.steps_done += 1
     new_state_q_values = self.model(new_game_state_feature).max(1)[0]
 
@@ -190,7 +188,7 @@ def reward_from_events(self, events: List[str], new_game_state) -> int:
     game_rewards = {
         e.COIN_COLLECTED: 200,
         e.CRATE_DESTROYED: 30,
-        e.INVALID_ACTION: -2,
+        e.INVALID_ACTION: -10,
         e.KILLED_OPPONENT: 100,
         e.GOT_KILLED: -200,
         e.KILLED_SELF: -100,

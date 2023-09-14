@@ -15,9 +15,9 @@
                 "1",
                 "--scenario",
                 "coin-heaven",
-                "--no-gui",
-                "--n-rounds",
-                "2000"
+                //"--no-gui",
+                //"--n-rounds",
+                //"100"
             ],
             "justMyCode": true
         }
