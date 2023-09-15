@@ -71,24 +71,24 @@ def act(self, game_state: dict) -> str:
     if self.train and random.random() < self.eps_threshold:
         self.logger.debug("Random action.")
         # 80%: walk in any direction. 10% wait. 10% bomb.
-        posX, posY = game_state['self'][3]
-        legal_actions = ['WAIT']
-        # game_state2d = gamestate_to_2dMap(game_state)
-
-        if game_state['field'][posX+1][posY] == 0:
-            legal_actions.append('RIGHT')
-        if game_state['field'][posX-1][posY] == 0:
-            legal_actions.append('LEFT')
-        if game_state['field'][posX][posY+1] == 0:
-            legal_actions.append('DOWN')
-        if game_state['field'][posX][posY-1] == 0:
-            legal_actions.append('UP')
+        # posX, posY = game_state['self'][3]
+        # legal_actions = ['WAIT']
+        # # game_state2d = gamestate_to_2dMap(game_state)
+# 
+        # if game_state['field'][posX+1][posY] == 0:
+        #     legal_actions.append('RIGHT')
+        # if game_state['field'][posX-1][posY] == 0:
+        #     legal_actions.append('LEFT')
+        # if game_state['field'][posX][posY+1] == 0:
+        #     legal_actions.append('DOWN')
+        # if game_state['field'][posX][posY-1] == 0:
+        #     legal_actions.append('UP')
         # if game_state2d[posX][posY][2] == 0:
         #     legal_actions.append('BOMB')
 
         # p = [1/len(legal_actions) for i in range(len(legal_actions))]
 
-        return np.random.choice(legal_actions)
+        return np.random.choice(ACTIONS, p=[.2, .2, .2, .2, .1, .1])
     else:
         with torch.no_grad():
             state = torch.tensor(state_to_features(game_state), dtype=torch.float32).unsqueeze(0)  # Add batch dimension

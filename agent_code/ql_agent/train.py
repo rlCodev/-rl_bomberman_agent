@@ -31,12 +31,12 @@ RECORD_ENEMY_TRANSITIONS = 1.0  # record enemy transitions with probability ...
 # LEARNING_RATE is the learning rate of the ``AdamW`` optimizer
 BATCH_SIZE = 12
 # Discound factor or gamma
-DISCOUNT_FACTOR = 0.9
-NUMBER_EPISODE = 500
-EPS_START = 0.001
+DISCOUNT_FACTOR = 0.95
+NUMBER_EPISODE = 20000
+EPS_START = 0.99
 EPS_END = 0.0
 STATIC_EPS = 0.1
-EPS_DECAY_FACTOR = 10000
+EPS_DECAY_FACTOR = 20000
 TAU = 0.001
 LEARNING_RATE = 0.0001
 
@@ -59,6 +59,8 @@ def setup_training(self):
     # self.optimizer = SGD(self.model.parameters(), lr=self.learning_rate)
     self.loss_function = nn.MSELoss()
     self.losses = []
+    self.tiles_visited = []
+    self.coins_collected = 0
 
     # Setup models
     input_size = 867
@@ -71,15 +73,19 @@ def setup_training(self):
         self.model.load_state_dict(torch.load('custom_mlp_policy_model.pth'))
     self.steps_done = 0
 
-    # self.eps_threshold = EPS_END + (EPS_START - EPS_END) * \
-    #     math.exp(-1. * self.steps_done / EPS_DECAY_FACTOR)
     self.eps_threshold = EPS_START
     self.episode_durations = []
+    self.episodes_coins_collected = []
     if os.path.isfile("training_episodes.pkl"):
         with open('training_episodes.pkl', 'rb') as f:
             eps_dur = pickle.load(f)
             if len(eps_dur) > 0:
                 self.episode_durations = eps_dur
+    if os.path.isfile("training_coins_collected.pkl"):
+        with open('training_coins_collected.pkl', 'rb') as f:
+            coins = pickle.load(f)
+            if len(coins) > 0:
+                self.episodes_coins_collected = coins
     self.episodes_round = 0
     self.logger.info(f"Current epsilon threshold: {self.eps_threshold}")
 
@@ -101,10 +107,10 @@ def game_events_occurred(self, old_game_state: dict, self_action: str, new_game_
     :param events: The events that occurred when going from  `old_game_state` to `new_game_state`
     """
     self.logger.debug(f'Encountered game event(s) {", ".join(map(repr, events))} in step {new_game_state["step"]}')
-
+    rewards = reward_from_events(self, events, new_game_state)
     old_game_state_feature = torch.tensor(state_to_features(old_game_state), dtype=torch.float32).unsqueeze(0)
     new_game_state_feature = torch.tensor(state_to_features(new_game_state), dtype=torch.float32).unsqueeze(0)
-    rewards = reward_from_events(self, events, new_game_state_feature)
+
 
     # Put rewards into tensor
     reward = torch.tensor([rewards])
@@ -142,7 +148,7 @@ def end_of_round(self, last_game_state: dict, last_action: str, events: List[str
     """
     # Compute final reward based on the last events
     last_game_state_feature = torch.tensor(state_to_features(last_game_state), dtype=torch.float32).unsqueeze(0)
-    final_reward = reward_from_events(self, events, last_game_state_feature)
+    final_reward = reward_from_events(self, events, last_game_state)
 
     # Convert final reward to a tensor
     final_reward = torch.tensor([final_reward], dtype=torch.float32)
@@ -162,7 +168,10 @@ def end_of_round(self, last_game_state: dict, last_action: str, events: List[str
     self.optimizer.step()
 
     self.episode_durations.append(self.episodes_round)
+    self.episodes_coins_collected.append(self.coins_collected)
     self.episodes_round = 0
+    self.tiles_visited = []
+    self.coins_collected = 0
     plot_durations(self, last_game_state)
     # Save model to file
     # torch.save(self.policy_net, 'custom_mlp_policy_model.pth')
@@ -170,8 +179,12 @@ def end_of_round(self, last_game_state: dict, last_action: str, events: List[str
     # Save current training episodes to file
     with open('training_episodes.pkl', 'wb') as f:
         pickle.dump(self.episode_durations, f)
+    with open('training_coins_collected.pkl', 'wb') as f:
+        pickle.dump(self.episodes_coins_collected, f) 
     # Update epsilon threshold for new round
     self.eps_threshold = EPS_START * (1 - (len(self.episode_durations) / NUMBER_EPISODE))
+    if (len(self.episode_durations) % 1000 == 0):
+        torch.save(self.model.state_dict(), f'mlp_model_after_{len(self.episode_durations)}.pth')
 
 def reward_from_events(self, events: List[str], new_game_state) -> int:
     """
@@ -186,12 +199,12 @@ def reward_from_events(self, events: List[str], new_game_state) -> int:
     #       Perform impossible action -2
     #       Die -300
     game_rewards = {
-        e.COIN_COLLECTED: 200,
+        e.COIN_COLLECTED: 500,
         e.CRATE_DESTROYED: 30,
         e.INVALID_ACTION: -10,
         e.KILLED_OPPONENT: 100,
-        e.GOT_KILLED: -200,
-        e.KILLED_SELF: -100,
+        e.GOT_KILLED: -50,
+        e.KILLED_SELF: -50,
         e.BOMB_DROPPED: 0,
         # e.SURVIVED_ROUND: 200,
     }
@@ -201,36 +214,59 @@ def reward_from_events(self, events: List[str], new_game_state) -> int:
         e.MOVED_RIGHT: -1,
         e.MOVED_UP: -1,
         e.MOVED_DOWN: -1,
-        e.WAITED: -1,
+        e.WAITED: -3,
     }
 
     reward_sum = 0
     for event in events:
+        if event == e.COIN_COLLECTED:
+            self.coins_collected += 1
         if event in game_rewards:
             reward_sum += game_rewards[event]
         if event in made_action:
             reward_sum += made_action[event]
-    # TODO: Check if agent in danger zone
+    
+    # Add reward for visiting new tiles
+    if 'self' in new_game_state and len(new_game_state['self']) > 3:
+        if new_game_state['self'][3] not in self.tiles_visited:
+            self.tiles_visited.append(new_game_state['self'][3])
+            reward_sum += 50
+    
+
     self.logger.info(f"Awarded {reward_sum} for events {', '.join(events)}")
     return reward_sum
 
 def plot_durations(self, gamestate, show_result=False):
-    plt.figure(1)
+    fig = plt.figure(1)
     durations_t = torch.tensor(self.episode_durations, dtype=torch.float)
+    coins_collected_t = torch.tensor(self.episodes_coins_collected, dtype=torch.float)
+
     if show_result:
-        plt.title('Result')
+        fig.suptitle('Result')
     else:
         plt.clf()
-        plt.title('Training...')
-    plt.xlabel('Episode')
-    plt.ylabel('Duration')
-    plt.plot(durations_t.numpy())
-    print("Coins collected = ", 50 - len(gamestate['coins']))
+        fig.suptitle('Training...')
+    
+    ax1 = fig.add_subplot(211)
+    ax1.set_xlabel('Episode')
+    ax1.set_ylabel('Duration')
+    ax1.plot(durations_t.numpy(), label='Duration')
     # Take 100 episode averages and plot them too
     if len(durations_t) >= 100:
         means = durations_t.unfold(0, 100, 1).mean(1).view(-1)
         means = torch.cat((torch.zeros(99), means))
-        plt.plot(means.numpy())
+        ax1.plot(means.numpy(), color='red', label='Duration (Avg)')
+
+    # Create a secondary y-axis for coins collected
+    ax2 = fig.add_subplot(212)
+    ax2.set_xlabel('Episode')
+    ax2.set_ylabel('Coins Collected')
+    ax2.plot(coins_collected_t.numpy(), label='Coins Collected', color='orange')
+
+    # Calculate and plot the moving average of coins collected
+    moving_average_window = 100  # Adjust this window size as needed
+    moving_avg = np.convolve(coins_collected_t.numpy(), np.ones(moving_average_window)/moving_average_window, mode='valid')
+    ax2.plot(np.arange(len(moving_avg)) + moving_average_window - 1, moving_avg, color='green', label='Coins Collected (Avg)')
     
     plt.pause(0.001)  # pause a bit so that plots are updated
     # Save plot to file
