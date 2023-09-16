@@ -113,12 +113,5 @@ replays/
 results/
 
 # Ignore saved models
-*.pth
-*.pkl
-
-.DS_Store
-
-custom_mlp_policy_model.pth
-custom_mlp_target_model.pth
-training_episodes.pkl
-training_coins_collected.pkl
+.pth
+.pkl

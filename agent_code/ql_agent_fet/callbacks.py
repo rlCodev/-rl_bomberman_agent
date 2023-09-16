@@ -1,5 +1,7 @@
 import os
 import random
+
+from agent_code.ql_agent_fet.feature_builder import state_to_features_special
 from .MLP import MLP
 import numpy as np
 import torch
@@ -35,7 +37,7 @@ def setup(self):
     #     with open("my-saved-model.pt", "rb") as file:
     #         self.model = pickle.load(file)
     input_size = 23
-    hidden_size = 60
+    hidden_size = 128
     output_size = len(ACTIONS)
 
     if not os.path.isfile("custom_mlp_policy_model.pth") and not self.train:
@@ -76,11 +78,11 @@ def act(self, game_state: dict) -> str:
     if self.train and random.random() < self.eps_threshold:
         self.logger.debug("Random action.")
         # 80%: walk in any direction. 10% wait. 10% bomb.
-        return np.random.choice(ACTIONS, p=[.2, .2, .2, .2, .199, .001])
+        return np.random.choice(ACTIONS, p=[.2, .2, .2, .2, .1, .1])
     else:
         with torch.no_grad():
-            state = torch.tensor(state_to_features(game_state), dtype=torch.float32).unsqueeze(0)  # Add batch dimension
-            prediction = self.policy_net(state).max(1)[1].view(1, 1).item()
+            state = torch.tensor(state_to_features_special(self, game_state), dtype=torch.float32).unsqueeze(0)  # Add batch dimension
+            prediction = self.policy_net(state).argmax(dim=2).item()
             chosen_action = action_index_to_string(prediction)
             
             # action_index = self.policy_net(state).argmax().item()
