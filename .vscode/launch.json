@@ -18,7 +18,9 @@
                 "1",
                 "--no-gui",
                 "--n-rounds", 
-                "10"
+                "10",
+                "--scenario",
+                "coin-heaven"
             ],
             "justMyCode": true
         }

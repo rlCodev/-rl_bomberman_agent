@@ -39,6 +39,7 @@ def setup(self):
     input_size = 23
     hidden_size = 128
     output_size = len(ACTIONS)
+    self.bomb_buffer = 0
 
     if not os.path.isfile("custom_mlp_policy_model.pth") and not self.train:
         # Size of feature representation below
