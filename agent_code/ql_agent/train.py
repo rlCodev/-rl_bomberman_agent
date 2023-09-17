@@ -1,5 +1,4 @@
-from collections import namedtuple, deque
-import math
+from collections import namedtuple
 from matplotlib import pyplot as plt
 import torch
 import pickle
@@ -9,42 +8,27 @@ import events as e
 from .callbacks import state_to_features
 import numpy as np
 from torch import nn
-from torch.optim import AdamW, SGD
+from torch.optim import AdamW
 from .MLP import MLP
-import random
-from .utils import action_index_to_string, action_string_to_index
+from .utils import action_string_to_index
 
 # This is only an example!
 Transition = namedtuple('Transition',
                         ('state', 'action', 'next_state', 'reward'))
-
-# Hyper parameters -- TODO modify/optimize
-TRANSITION_HISTORY_SIZE = 20  # keep only ... last transitions
-RECORD_ENEMY_TRANSITIONS = 1.0  # record enemy transitions with probability ...
-
-# BATCH_SIZE is the number of transitions sampled from the replay buffer
-# DISCOUNT_FACTOR is the discount factor as mentioned in the previous section
-# EPS_START is the starting value of epsilon
-# EPS_END is the final value of epsilon
-# EPS_DECAY controls the rate of exponential decay of epsilon, higher means a slower decay
-# TAU is the update rate of the target network
-# LEARNING_RATE is the learning rate of the ``AdamW`` optimizer
-BATCH_SIZE = 12
 # Discound factor or gamma
 DISCOUNT_FACTOR = 0.95
-NUMBER_EPISODE = 20000
 EPS_START = 0.99
 EPS_END = 0.0
-STATIC_EPS = 0.1
-EPS_DECAY_FACTOR = 20000
-TAU = 0.001
 LEARNING_RATE = 0.0001
 
 ACTIONS = ['UP', 'RIGHT', 'DOWN', 'LEFT', 'WAIT', 'BOMB']
 
-# Events
-PLACEHOLDER_EVENT = "PLACEHOLDER"
-
+#Number Episodes has to match the number of episodes set in the json
+NUMBER_EPISODE = 5000
+INPUT_SIZE = 867
+HIDDEN_LAYER_1_SIZE = 620
+HIDDEN_LAYER_2_SIZE = 310
+OUTPUT_SIZE = len(ACTIONS)
 
 def setup_training(self):
     """
@@ -54,19 +38,13 @@ def setup_training(self):
 
     :param self: This object is passed to all callbacks and you can set arbitrary values.
     """
-
-    # Use SGD optimizer and Mean Squared Error loss function
-    # self.optimizer = SGD(self.model.parameters(), lr=self.learning_rate)
     self.loss_function = nn.MSELoss()
     self.losses = []
     self.tiles_visited = []
     self.coins_collected = 0
 
     # Setup models
-    input_size = 867
-    hidden_size = 128
-    output_size = len(ACTIONS)
-    self.model = MLP(input_size, hidden_size, output_size)
+    self.model = MLP(INPUT_SIZE, HIDDEN_LAYER_1_SIZE, HIDDEN_LAYER_1_SIZE, OUTPUT_SIZE)
     self.optimizer = AdamW(self.model.parameters(), lr=LEARNING_RATE, amsgrad=True)
 
     if os.path.isfile("custom_mlp_policy_model.pth"):
@@ -193,11 +171,6 @@ def reward_from_events(self, events: List[str], new_game_state) -> int:
     Here you can modify the rewards your agent get so as to en/discourage
     certain behavior.
     """
-    #       Kill a player 100
-    #       Break a wall 30
-    #       Perform action -1
-    #       Perform impossible action -2
-    #       Die -300
     game_rewards = {
         e.COIN_COLLECTED: 500,
         e.CRATE_DESTROYED: 30,
@@ -231,7 +204,10 @@ def reward_from_events(self, events: List[str], new_game_state) -> int:
         if new_game_state['self'][3] not in self.tiles_visited:
             self.tiles_visited.append(new_game_state['self'][3])
             reward_sum += 50
-    
+    #TODO
+    # add punishment for choosing the same illegal action multiple times in a row
+    # add reward for avoiding danger
+    # add reward for moving towards coins
 
     self.logger.info(f"Awarded {reward_sum} for events {', '.join(events)}")
     return reward_sum
