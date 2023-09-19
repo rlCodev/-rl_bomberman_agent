@@ -7,6 +7,7 @@ import numpy as np
 import torch
 from gymnasium.spaces import Discrete
 from .utils import action_index_to_string, action_string_to_index
+from ..rule_based_agent import callbacks as rule_based_agent
 
 ACTIONS = ['UP', 'RIGHT', 'DOWN', 'LEFT', 'WAIT', 'BOMB']
 
@@ -40,6 +41,7 @@ def setup(self):
     hidden_size = 128
     output_size = len(ACTIONS)
     self.bomb_buffer = 0
+    self.current_round = 0
 
     if not os.path.isfile("custom_mlp_policy_model.pth") and not self.train:
         # Size of feature representation below
@@ -79,11 +81,21 @@ def act(self, game_state: dict) -> str:
     if self.train and random.random() < self.eps_threshold:
         self.logger.debug("Random action.")
         # 80%: walk in any direction. 10% wait. 10% bomb.
-        return np.random.choice(ACTIONS, p=[.2, .2, .2, .2, .1, .1])
+        # choice = np.random.choice([1,2])
+        # if choice == 1:
+        rule_based_action = rule_based_agent.act(self, game_state)
+        if rule_based_action is not None:
+            return rule_based_action
+        else:
+            return np.random.choice(ACTIONS, p=[.2, .2, .2, .2, .1, .1]) 
+        # else:
+        #     print("Random")
+        #     return np.random.choice(ACTIONS, p=[.2, .2, .2, .2, .1, .1])
     else:
         with torch.no_grad():
             state = torch.tensor(state_to_features_special(self, game_state), dtype=torch.float32).unsqueeze(0)  # Add batch dimension
             prediction = self.policy_net(state).argmax(dim=2).item()
+            print("prediction: ", prediction)
             chosen_action = action_index_to_string(prediction)
             
             # action_index = self.policy_net(state).argmax().item()

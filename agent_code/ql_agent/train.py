@@ -284,10 +284,10 @@ def update_model(self):
     # for each batch state according to policy_net
     print(self.policy_net(state_batch).shape)
     print(action_batch.shape)
-    print("state example", state_batch[0])
-    print("state example", state_batch[1])
+    # print("state example", state_batch[0])
+    # print("state example", state_batch[1])
     prediction = self.policy_net(state_batch)
-    print("prediction example", self.policy_net(state_batch)[0])
+    # print("prediction example", self.policy_net(state_batch)[0])
     state_action_values = self.policy_net(state_batch).gather(1, action_batch)
 
     # Compute V(s_{t+1}) for all next states.
@@ -306,7 +306,7 @@ def update_model(self):
     loss = criterion(state_action_values, expected_state_action_values.unsqueeze(1))
     self.losses.append(loss)
 
-    print(f"Episode {len(self.episode_durations)} Loss: {loss.detach().numpy().item()}")
+    # print(f"Episode {len(self.episode_durations)} Loss: {loss.detach().numpy().item()}")
     # Optimize the model
     self.optimizer.zero_grad()
     loss.backward()
