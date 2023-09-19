@@ -8,7 +8,7 @@ import os
 import events as e
 import numpy as np
 from torch import nn
-from torch.optim import AdamW, SGD
+from torch.optim import AdamW
 from .MLP import MLP
 import random
 from .utils import action_index_to_string, action_string_to_index
@@ -228,12 +228,12 @@ def reward_from_events(self, events: List[str], new_game_state: dict) -> int:
     #       Die -300
     game_rewards = {
         e.COIN_COLLECTED: 500,
-        e.CRATE_DESTROYED: 300,
+        e.CRATE_DESTROYED: 50,
         e.INVALID_ACTION: -50,
-        e.KILLED_OPPONENT: 100,
+        e.KILLED_OPPONENT: 200,
         e.GOT_KILLED: -300,
         e.KILLED_SELF: -300,
-        e.BOMB_DROPPED: 1,
+        e.BOMB_DROPPED: 5,
     }
 
     made_action = {
@@ -241,7 +241,7 @@ def reward_from_events(self, events: List[str], new_game_state: dict) -> int:
         e.MOVED_RIGHT: 1,
         e.MOVED_UP: 1,
         e.MOVED_DOWN: 1,
-        e.WAITED: -1,
+        e.WAITED: -20,
     }
 
     reward_sum = 0
@@ -311,7 +311,7 @@ def update_model(self):
     loss = criterion(state_action_values, expected_state_action_values.unsqueeze(1))
     self.losses.append(loss)
 
-    print(f"Episode {len(self.episode_durations)} Loss: {loss.detach().numpy().item()}")
+    # print(f"Episode {len(self.episode_durations)} Loss: {loss.detach().numpy().item()}")
     # Optimize the model
     self.optimizer.zero_grad()
     loss.backward()

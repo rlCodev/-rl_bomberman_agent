@@ -84,7 +84,7 @@ def act(self, game_state: dict) -> str:
         # choice = np.random.choice([1,2])
         # if choice == 1:
         rule_based_action = rule_based_agent.act(self, game_state)
-        if rule_based_action is not None:
+        if rule_based_action is not None: #and random.random() < self.eps_threshold:
             return rule_based_action
         else:
             return np.random.choice(ACTIONS, p=[.2, .2, .2, .2, .1, .1]) 
@@ -95,7 +95,6 @@ def act(self, game_state: dict) -> str:
         with torch.no_grad():
             state = torch.tensor(state_to_features_special(self, game_state), dtype=torch.float32).unsqueeze(0)  # Add batch dimension
             prediction = self.policy_net(state).argmax(dim=2).item()
-            print("prediction: ", prediction)
             chosen_action = action_index_to_string(prediction)
             
             # action_index = self.policy_net(state).argmax().item()
