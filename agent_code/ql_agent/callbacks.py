@@ -77,26 +77,30 @@ def act(self, game_state: dict) -> str:
     #     'coins': [coin.get_state() for coin in self.coins if coin.collectable],
     #     'user_input': self.user_input,
     # }
-    rule_based_action = rule_based_agent.act(self, game_state)
-    if rule_based_action is not None: #and random.random() < self.eps_threshold:
-        return rule_based_action
-    else:
-        return np.random.choice(ACTIONS, p=[.2, .2, .2, .2, .1, .1]) 
-    if self.train and random.random() < self.eps_threshold:
-        self.logger.debug("Random action.")
-        # 80%: walk in any direction. 10% wait. 10% bomb.
-        # choice = np.random.choice([1,2])
-        # if choice == 1:
+    if self.train:
+
         rule_based_action = rule_based_agent.act(self, game_state)
         if rule_based_action is not None: #and random.random() < self.eps_threshold:
             return rule_based_action
         else:
             return np.random.choice(ACTIONS, p=[.2, .2, .2, .2, .1, .1]) 
+    else:
+
+    # if self.train and random.random() < self.eps_threshold:
+    #     self.logger.debug("Random action.")
+    #     # 80%: walk in any direction. 10% wait. 10% bomb.
+    #     # choice = np.random.choice([1,2])
+    #     # if choice == 1:
+    #     rule_based_action = rule_based_agent.act(self, game_state)
+    #     if rule_based_action is not None: #and random.random() < self.eps_threshold:
+    #         return rule_based_action
+    #     else:
+    #         return np.random.choice(ACTIONS, p=[.2, .2, .2, .2, .1, .1]) 
     # if self.train and random.random() < self.eps_threshold:
     #     self.logger.debug("Random action.")
     #     # 80%: walk in any direction. 10% wait. 10% bomb.
     #     return np.random.choice(ACTIONS, p=[.2, .2, .2, .2, .1, .1])
-    else:
+    # else:
         with torch.no_grad():
             state = torch.tensor(state_to_features(game_state), dtype=torch.float32).unsqueeze(0)  # Add batch dimension
             prediction = self.policy_net(state).max(1)[1].view(1, 1).item()
