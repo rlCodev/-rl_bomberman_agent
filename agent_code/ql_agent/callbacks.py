@@ -136,7 +136,6 @@ def state_to_features(self, game_state: dict) -> np.array:
     :param game_state: A dictionary describing the current game board.
     :return: np.array
     """
-    print(f"Feature of state: {game_state['step']}", state_to_features_matrix(self, game_state, self.tiles_visited))
     if game_state is None:
         return None
     

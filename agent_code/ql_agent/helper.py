@@ -2,38 +2,39 @@ import numpy as np
 from collections import deque
 import settings as s
 
-STEP = np.array([(1,0), (-1,0), (0,1), (0,-1)])
-ACTION_NAME = ['RIGHT', 'LEFT', 'UP', 'DOWN']
+STEP = np.array([(1,0), (-1,0), (0,1), (0,-1), (0,0)])
+ACTION_NAME = ['RIGHT', 'LEFT', 'UP', 'DOWN', 'WAIT']
 
 def state_to_features_matrix(self, game_state, tiles_explored_set):
     position = game_state['self'][3]
     feature_matrix = []
-
+    print("step feature")
+    danger_map, extended_explosion_map = get_danger_map(game_state['field'], game_state['bombs'])
     for step in STEP:
         move_coords = position + step
-        move_feature_vector = []
+        if(valid_action(move_coords, game_state)):
+            move_feature_vector = []
 
-        # check invalid actions
-        move_feature_vector.append(invalid_action(move_coords, game_state))
+            # get distance to nearest coin
+            move_feature_vector.append(distance_to_coin(move_coords, game_state))
 
-        # get distance to nearest coin
-        move_feature_vector.append(distance_to_coin(move_coords, game_state))
+            # get distance to nearest opponent
+            move_feature_vector.append(distance_to_opponent(move_coords, game_state))
 
-        # get distance to nearest opponent
-        move_feature_vector.append(distance_to_opponent(move_coords, game_state))
+            # get number of tiles explored
+            move_feature_vector.append(tiles_explored(move_coords, game_state, tiles_explored_set))
 
-        # get number of tiles explored
-        move_feature_vector.append(tiles_explored(move_coords, game_state, tiles_explored_set))
+            # get danger
+            move_feature_vector.append(get_danger(danger_map, move_coords))
 
-        # get danger
-        move_feature_vector.append(get_danger(game_state['field'], game_state['bombs'], position, step))
+            # get certain death
+            move_feature_vector.append(certain_death(game_state, step, danger_map, extended_explosion_map))
 
-        # get certain death
-        move_feature_vector.append(certain_death(game_state, step))
+            # get bomb effect
+            move_feature_vector.append(bomb_effect(move_coords, game_state))
 
-        # get bomb effect
-        move_feature_vector.append(bomb_effect(move_coords, game_state))
-
+        else:
+            move_feature_vector = [-1] * 6
         # check for chained invalid actions 
         # move_feature_vector.append(chain_inv_a(self, move_coords, game_state))
 
@@ -41,7 +42,6 @@ def state_to_features_matrix(self, game_state, tiles_explored_set):
         move_feature_vector.append(backtracked_move(self, move_coords, game_state))
 
         feature_matrix.append(move_feature_vector)
-
     return np.array(feature_matrix)
 
 def invalid_action(position, game_state):
@@ -162,30 +162,61 @@ def manhattan_distance(point1, point2):
     except TypeError:
         print(f'point1: {point1}, point2: {point2}')
         raise TypeError
-        
-def get_extended_explosion_map(game_state):
-    field = game_state['field']
-    bombs = game_state['bombs']
-    extended_explosion_map = np.full_like(field, -1)
     
-    for bomb_position, countdown in bombs:
-        extended_explosion_map[bomb_position[0], bomb_position[1]] = countdown
+# def get_extended_explosion_map(game_state):
+#     field = game_state['field']
+#     bombs = game_state['bombs']
+#     extended_explosion_map = np.full_like(field, -1)
+#     # Add walls and crates to the explosion map
+#     extended_explosion_map[field == -1] = -2
+#     extended_explosion_map[field == 1] = -3
 
-        for length in range(1, s.BOMB_POWER + 1):
-            # Calculate the possible explosion positions
-            beams = bomb_position + STEP * length
-            
-            # Clip the positions to stay within the field
-            beams = np.clip(beams, 0, np.array(field.shape) - 1)
-            
-            # Get objects at the possible explosion positions
-            objects = field[beams[:, 0], beams[:, 1]]
-            
-            # Update the explosion map where necessary
-            update_mask = (objects != -1) & (extended_explosion_map[beams[:, 0], beams[:, 1]] < countdown)
-            extended_explosion_map[beams[update_mask][:, 0], beams[update_mask][:, 1]] = countdown
+#     for bomb_position, countdown in bombs:
+#         extended_explosion_map[bomb_position[0], bomb_position[1]] = countdown
 
-    return extended_explosion_map
+#         for length in range(1, s.BOMB_POWER + 1):
+#             # Calculate the possible explosion positions
+#             beams = bomb_position + STEP * length
+            
+#             # Clip the positions to stay within the field
+#             beams = np.clip(beams, 0, np.array(field.shape) - 1)
+            
+#             # Get objects at the possible explosion positions
+#             objects = field[beams[:, 0], beams[:, 1]]
+            
+#             # Update the explosion map where necessary
+#             update_mask = (objects != -1) & (extended_explosion_map[beams[:, 0], beams[:, 1]] < countdown)
+#             extended_explosion_map[beams[update_mask][:, 0], beams[update_mask][:, 1]] = countdown
+
+#     return extended_explosion_map
+        
+# def get_extended_explosion_map(game_state):
+#     field = game_state['field']
+#     bombs = game_state['bombs']
+#     extended_explosion_map = np.full_like(field, -1)
+
+#     # Add walls and crates to the explosion map
+#     extended_explosion_map[field == -1] = -2
+#     extended_explosion_map[field == 1] = -3
+    
+#     for bomb_position, countdown in bombs:
+#         extended_explosion_map[bomb_position[0], bomb_position[1]] = countdown
+
+#         for length in range(1, s.BOMB_POWER + 1):
+#             # Calculate the possible explosion positions
+#             beams = bomb_position + STEP * length
+            
+#             # Clip the positions to stay within the field
+#             beams = np.clip(beams, 0, np.array(field.shape) - 1)
+            
+#             # Get objects at the possible explosion positions
+#             objects = field[beams[:, 0], beams[:, 1]]
+            
+#             # Update the explosion map where necessary
+#             update_mask = (objects != -1) & (extended_explosion_map[beams[:, 0], beams[:, 1]] < countdown)
+#             extended_explosion_map[beams[update_mask][:, 0], beams[update_mask][:, 1]] = countdown
+
+#     return extended_explosion_map
 
 # def get_extended_explosion_map(game_state):
 #     field = game_state['field']
@@ -215,6 +246,8 @@ def get_extended_explosion_map(game_state):
     field = game_state['field']
     bombs = game_state['bombs'].copy()
     extended_explosion_map = np.full_like(field, -1)
+    extended_explosion_map[field == -1] = -2
+    extended_explosion_map[field == 1] = -3
     
     for bomb_position, countdown in bombs:
         extended_explosion_map[bomb_position[0], bomb_position[1]] = countdown
@@ -231,13 +264,13 @@ def get_extended_explosion_map(game_state):
                 else:
                     break  # No need to continue updating if countdown is not greater
     return extended_explosion_map
-
-def get_danger(field, bombs, position, direction):
-    extended_explosion_map = np.zeros_like(field)
+def get_danger_map(field, bombs):
+    danger_map = np.zeros_like(field)
+    extended_explosion_map = np.full_like(field, 10)
     max_danger = s.BOMB_POWER + 1
     for bomb_position, countdown in bombs:
-        extended_explosion_map[bomb_position[0], bomb_position[1]] = max_danger
-        
+        danger_map[bomb_position[0], bomb_position[1]] = max_danger
+        extended_explosion_map[bomb_position[0], bomb_position[1]] = countdown
         for direction in STEP:
             for length in range(1, s.BOMB_POWER + 1):
                 beam = direction * length + np.array(bomb_position)
@@ -245,32 +278,31 @@ def get_danger(field, bombs, position, direction):
                 
                 if obj == -1:
                     break
-                if extended_explosion_map[beam[0], beam[1]] < max_danger - length:
-                    extended_explosion_map[beam[0], beam[1]] = max_danger - length
-                else:
-                    break  # No need to continue updating if countdown is not greater
-    new_agent_position = position + direction
-    return extended_explosion_map[new_agent_position[0], new_agent_position[1]]
+                if danger_map[beam[0], beam[1]] < max_danger - length:
+                    danger_map[beam[0], beam[1]] = max_danger - length
+                if extended_explosion_map[beam[0], beam[1]] > countdown:
+                    extended_explosion_map[beam[0], beam[1]] = countdown
+    return danger_map, extended_explosion_map
+
+def get_danger(danger_map, position):
+    return danger_map[position[0], position[1]]
 
 
-def certain_death(game_state, direction):
-    # Get the extended explosion map
-    extended_explosion_map = get_extended_explosion_map(game_state)
+def certain_death(game_state, direction, danger_map, extended_explosion_map):
     
     # Extract relevant information from the game state
     self_x, self_y = game_state['self'][3] + direction
-    time_to_explosion = extended_explosion_map[self_x, self_y]
-
+    danger = danger_map[self_x, self_y]
+    time_to_death = extended_explosion_map[self_x, self_y]
     # Get closest safe tile without explosion
-    if time_to_explosion == -1:
+    if danger == 0:
         return False
     else:
-        # Get coordinates of the closest safe tile
-        safe_tiles = np.argwhere(extended_explosion_map == -1)
-        closest_safe_tile = [np.argmin(np.sum(np.abs(safe_tiles - [self_x, self_y]), axis=1))]
-
         # Calculate steps to take to reach the closest safe tile considering walls and crates
-        return (not tile_reachable(game_state, closest_safe_tile, extended_explosion_map))
+        if invalid_action((self_x, self_y), game_state) == 1:
+            return 1
+        else:
+            return 1 if (not move_to_save_space(game_state, (self_x, self_y), danger_map, time_to_death)) else 0
         
 
 def tile_reachable(game_state, tile, extended_explosion_map):
@@ -287,25 +319,33 @@ def tile_reachable(game_state, tile, extended_explosion_map):
         # Get step with minimum distance to the tile
         min_step = valid_steps[np.argmin(np.sum(np.abs(np.array(valid_steps) - np.array(tile)), axis=1))]
         self_x, self_y = self_x + min_step[0], self_y + min_step[1]
+        extended_explosion_map[extended_explosion_map > 0] -= 1
         # Update explosion map -1 for each tile where not -1
         if extended_explosion_map[self_x, self_y] == 0:
             return False
-        if (self_x, self_y) == tile and extended_explosion_map[self_x, self_y] != 0:
+        if (self_x, self_y) == tuple(tile) and extended_explosion_map[self_x, self_y] != 0:
             return True
 
-        extended_explosion_map[extended_explosion_map != -1] -= 1
         steps += 1
-        
+
+def move_to_save_space(game_state, position, danger_map, expl_timer):
+    for i in range(expl_timer):
+        valid_steps = get_valid_actions(position, game_state)
+        min_step = valid_steps[np.argmin([danger_map[position[0] + step[0], position[1] + step[1]] for step in valid_steps])]
+        position = position[0] + min_step[0], position[1] + min_step[1]
+        if danger_map[position[0], position[1]] == 0:
+            return True
+    return False
 
 def get_valid_actions(position, game_state):
     valid_actions = []
-
-    for (dx, dy) in STEP:
-        new_position = (position[0] + dx, position[1] + dy)
+    
+    for step in STEP:
+        new_position = position + step
 
         # Check if the action is valid using the invalid_action method
         if invalid_action(new_position, game_state) == 1:
-            valid_actions.append((dx, dy))
+            valid_actions.append(step)
 
     return valid_actions
 
@@ -328,3 +368,9 @@ def get_action_name(coord_change):
     if matching_indices.size > 0:
         return ACTION_NAME[matching_indices[0]]
     return None
+
+def valid_action(position, game_state):
+    if game_state['field'][position[0]][position[1]] == 0:
+        return True
+    else:
+        return False
