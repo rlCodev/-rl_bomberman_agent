@@ -2,9 +2,10 @@ import numpy as np
 from collections import deque
 import settings as s
 
-STEP = np.array([[1,0], [-1,0], [0,1], [0,-1]])
+STEP = np.array([(1,0), (-1,0), (0,1), (0,-1)])
+ACTION_NAME = ['RIGHT', 'LEFT', 'UP', 'DOWN']
 
-def state_to_features_matrix(game_state, tiles_explored_set):
+def state_to_features_matrix(self, game_state, tiles_explored_set):
     position = game_state['self'][3]
     feature_matrix = []
 
@@ -25,27 +26,34 @@ def state_to_features_matrix(game_state, tiles_explored_set):
         move_feature_vector.append(tiles_explored(move_coords, game_state, tiles_explored_set))
 
         # get danger
-        # TODO
+        move_feature_vector.append(get_danger(game_state['field'], game_state['bombs'], position, step))
 
         # get certain death
-        # TODO
+        move_feature_vector.append(certain_death(game_state, step))
 
         # get bomb effect
         move_feature_vector.append(bomb_effect(move_coords, game_state))
 
         # check for chained invalid actions 
+        # move_feature_vector.append(chain_inv_a(self, move_coords, game_state))
 
         # check for backtracked moves
-        
+        move_feature_vector.append(backtracked_move(self, move_coords, game_state))
+
+        feature_matrix.append(move_feature_vector)
+
+    return np.array(feature_matrix)
 
 def invalid_action(position, game_state):
-    if game_state['field'][position] == 0:
+    if game_state['field'][position[0]][position[1]] == 0:
         return 1
     else:
         return -1
 
 def distance_to_coin(position, game_state):
     # Returns distance of nearest coin for each step and for the current position respectively
+    if game_state['coins'] == []:
+        return 0
     delta_coins = {}
     for coin in game_state['coins']:
         delta_coins[coin] = manhattan_distance(position, coin)
@@ -54,7 +62,7 @@ def distance_to_coin(position, game_state):
 
 def distance_to_opponent(position, game_state):
     # Returns distance of nearest opponents for each step and for the current position respectively
-    opponents = [player[1] for player in game_state['others']]
+    opponents = [player[3] for player in game_state['others']]
     return nearest_distance(position, opponents)
 
 # helper function to calculate the nearest distance to a list of coordinates
@@ -66,8 +74,10 @@ def nearest_distance(position, coordinates):
     return distance
 
 def tiles_explored(position, game_state, tiles_explored_set):
-    if game_state['field'][position] == 0:
-        if position not in tiles_explored_set:
+    x_pos = position[0]
+    y_pos = position[1]
+    if game_state['field'][x_pos][y_pos] == 0:
+        if tuple(position) not in tiles_explored_set:
             return 1
         else:
             return 0
@@ -84,6 +94,8 @@ def bomb_effect(position, game_state):
         for direction in STEP:
             for radius in range(1, 4):
                 explosion = position + direction*radius
+                # Clip the positions to stay within the field
+                explosion = np.clip(explosion, 0, np.array(game_state['field'].shape) - 1)
                 tile = game_state['field'][explosion[0], explosion[1]]
                 if tile == -1:
                     break
@@ -142,10 +154,15 @@ def manhattan_distance(point1, point2):
     Returns:
     int: The Manhattan distance between the two points.
     """
-    x1, y1 = point1
-    x2, y2 = point2
-    return abs(x1 - x2) + abs(y1 - y2)
-
+    try:
+        x1, y1 = point1
+        x2, y2 = point2
+    
+        return abs(x1 - x2) + abs(y1 - y2)
+    except TypeError:
+        print(f'point1: {point1}, point2: {point2}')
+        raise TypeError
+        
 def get_extended_explosion_map(game_state):
     field = game_state['field']
     bombs = game_state['bombs']
@@ -250,7 +267,7 @@ def certain_death(game_state, direction):
     else:
         # Get coordinates of the closest safe tile
         safe_tiles = np.argwhere(extended_explosion_map == -1)
-        closest_safe_tile = closest_safe_tile[np.argmin(np.sum(np.abs(safe_tiles - [self_x, self_y]), axis=1))]
+        closest_safe_tile = [np.argmin(np.sum(np.abs(safe_tiles - [self_x, self_y]), axis=1))]
 
         # Calculate steps to take to reach the closest safe tile considering walls and crates
         return (not tile_reachable(game_state, closest_safe_tile, extended_explosion_map))
@@ -283,7 +300,7 @@ def tile_reachable(game_state, tile, extended_explosion_map):
 def get_valid_actions(position, game_state):
     valid_actions = []
 
-    for (dx, dy) in STEP.items():
+    for (dx, dy) in STEP:
         new_position = (position[0] + dx, position[1] + dy)
 
         # Check if the action is valid using the invalid_action method
@@ -291,3 +308,23 @@ def get_valid_actions(position, game_state):
             valid_actions.append((dx, dy))
 
     return valid_actions
+
+
+def backtracked_move(self, move_coords, game_state):
+    # check in memory if move_coords is in the last 3 moves
+    # Get the last 5 actions
+    last_5_actions = [item.action for item in self.memory.get_last_n_items(5)]
+
+    # Count occurrences of a specific action name (e.g., 'action_2')
+    action_name = get_action_name(move_coords)
+    count = last_5_actions.count(action_name)
+    return count
+
+def chain_inv_a(self, move_coords, game_state):
+    pass
+
+def get_action_name(coord_change):
+    matching_indices = np.where(np.all(STEP == coord_change, axis=1))[0]
+    if matching_indices.size > 0:
+        return ACTION_NAME[matching_indices[0]]
+    return None

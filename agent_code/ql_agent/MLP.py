@@ -22,8 +22,8 @@ class MLP(nn.Module):
 
         for layer in self.layers:
             if isinstance(layer, nn.Linear):
-                nn.init.uniform(layer.weight, -0.5, 0.5)
-                nn.init.uniform(layer.bias, -0.5, 0.5)
+                nn.init.uniform_(layer.weight, -0.5, 0.5)
+                nn.init.uniform_(layer.bias, -0.5, 0.5)
 
 
     def forward(self, x):

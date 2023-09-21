@@ -26,6 +26,13 @@ class ReplayMemory(object):
     def sample(self, batch_size):
         return random.sample(self.memory, batch_size)
 
+    def get_last_n_items(self, n):
+        """Get the last n added items"""
+        if n <= len(self.memory):
+            return list(self.memory)[-n:]
+        else:
+            return list(self.memory)
+
     def __len__(self):
         return len(self.memory)
 
@@ -134,8 +141,8 @@ def game_events_occurred(self, old_game_state: dict, self_action: str, new_game_
     self.logger.debug(f'Encountered game event(s) {", ".join(map(repr, events))} in step {new_game_state["step"]}')
     # old_game_state_feature = state_to_features(old_game_state)
     # new_game_state_feature = state_to_features(new_game_state)
-    old_game_state_feature = torch.tensor(state_to_features(old_game_state), dtype=torch.float32).unsqueeze(0)
-    new_game_state_feature = torch.tensor(state_to_features(new_game_state), dtype=torch.float32).unsqueeze(0)
+    old_game_state_feature = torch.tensor(state_to_features(self, old_game_state), dtype=torch.float32).unsqueeze(0)
+    new_game_state_feature = torch.tensor(state_to_features(self, new_game_state), dtype=torch.float32).unsqueeze(0)
     rewards = reward_from_events(self, events, new_game_state)
     # Put rewards into tensor
     reward = torch.tensor([rewards])
@@ -176,7 +183,7 @@ def end_of_round(self, last_game_state: dict, last_action: str, events: List[str
     self.logger.debug(f'Encountered event(s) {", ".join(map(repr, events))} in final step')
     # self.memory.append(
     #     Transition(state_to_features(last_game_state), last_action, None, reward_from_events(self, events)))
-    last_game_state_feature = torch.tensor(state_to_features(last_game_state), dtype=torch.float32).unsqueeze(0)
+    last_game_state_feature = torch.tensor(state_to_features(self, last_game_state), dtype=torch.float32).unsqueeze(0)
     rewards = reward_from_events(self, events, last_game_state)
     # Put rewards into tensor
     reward = torch.tensor([rewards])

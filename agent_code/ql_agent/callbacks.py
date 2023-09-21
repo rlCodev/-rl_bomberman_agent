@@ -1,5 +1,7 @@
 import os
 import random
+
+from agent_code.ql_agent.helper import state_to_features_matrix
 from .MLP import MLP
 import numpy as np
 import torch
@@ -77,14 +79,6 @@ def act(self, game_state: dict) -> str:
     #     'coins': [coin.get_state() for coin in self.coins if coin.collectable],
     #     'user_input': self.user_input,
     # }
-    if self.train:
-
-        rule_based_action = rule_based_agent.act(self, game_state)
-        if rule_based_action is not None: #and random.random() < self.eps_threshold:
-            return rule_based_action
-        else:
-            return np.random.choice(ACTIONS, p=[.2, .2, .2, .2, .1, .1]) 
-    else:
 
     # if self.train and random.random() < self.eps_threshold:
     #     self.logger.debug("Random action.")
@@ -96,13 +90,19 @@ def act(self, game_state: dict) -> str:
     #         return rule_based_action
     #     else:
     #         return np.random.choice(ACTIONS, p=[.2, .2, .2, .2, .1, .1]) 
-    # if self.train and random.random() < self.eps_threshold:
-    #     self.logger.debug("Random action.")
-    #     # 80%: walk in any direction. 10% wait. 10% bomb.
-    #     return np.random.choice(ACTIONS, p=[.2, .2, .2, .2, .1, .1])
-    # else:
+    action_chosen = None
+    if self.train and random.random() < self.eps_threshold:
+        self.logger.debug("Random action.")
+        # 80%: walk in any direction. 10% wait. 10% bomb.
+        # return np.random.choice(ACTIONS, p=[.2, .2, .2, .2, .1, .1])
+        rule_based_action = rule_based_agent.act(self, game_state)
+        if rule_based_action is not None: #and random.random() < self.eps_threshold:
+            action_chosen = rule_based_action
+        else:
+            action_chosen = np.random.choice(ACTIONS, p=[.2, .2, .2, .2, .1, .1]) 
+    else:
         with torch.no_grad():
-            state = torch.tensor(state_to_features(game_state), dtype=torch.float32).unsqueeze(0)  # Add batch dimension
+            state = torch.tensor(state_to_features(self, game_state), dtype=torch.float32).unsqueeze(0)  # Add batch dimension
             prediction = self.policy_net(state).max(1)[1].view(1, 1).item()
             chosen_action = action_index_to_string(prediction)
             
@@ -114,8 +114,8 @@ def act(self, game_state: dict) -> str:
             # action_index = torch.argmax(q_values).item()
             # chosen_action = ACTIONS[action_index]
             self.logger.info(f'Predicted action: {chosen_action}')
-            return chosen_action
-    
+            action_chosen = chosen_action
+    return action_chosen
 
 
     # # todo Exploration vs exploitation
@@ -129,13 +129,14 @@ def act(self, game_state: dict) -> str:
     # return np.random.choice(ACTIONS, p=self.model)
 
 
-def state_to_features(game_state: dict) -> np.array:
+def state_to_features(self, game_state: dict) -> np.array:
     """
     Converts the game state to the input of your model, i.e. a feature vector.
 
     :param game_state: A dictionary describing the current game board.
     :return: np.array
     """
+    print(f"Feature of state: {game_state['step']}", state_to_features_matrix(self, game_state, self.tiles_visited))
     if game_state is None:
         return None
     
