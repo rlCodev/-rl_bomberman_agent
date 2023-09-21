@@ -105,6 +105,7 @@ class GenericWorld:
     def build_arena(self) -> Tuple[np.array, List[Coin], List[Agent]]:
         raise NotImplementedError()
 
+
     def add_agent(self, agent_dir, name, train=False):
         assert len(self.agents) < s.MAX_AGENTS
 
