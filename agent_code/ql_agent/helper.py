@@ -1,7 +1,6 @@
 import numpy as np
 
-# Right, Left, Down, Up, Wait
-STEP = np.array([[1,0], [-1,0], [0,1], [0,-1], [0,0]])
+STEP = np.array([[1,0], [-1,0], [0,1], [0,-1]])
 
 def state_to_features_matrix(game_state, tiles_explored_set):
     position = game_state['self'][3]
