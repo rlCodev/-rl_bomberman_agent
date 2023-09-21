@@ -1,25 +1,42 @@
 import numpy as np
 
-STEP = np.array([[1,0], [-1,0], [0,1], [0,-1]])
+
+def manhattan_distance(x1_y1, x2_y2):
+    x1 = x1_y1[0]
+    y1 = x1_y1[1]
+    x2 = x2_y2[0]
+    y2 = x2_y2[1]
+    return abs(x1 - x2) + abs(y1 - y2)
+
+
+# Example usage
+point1 = (1, 3)  # (x, y) coordinates of the first point
+point2 = (4, 7)  # (x, y) coordinates of the second point
+
+distance = manhattan_distance(point1[0], point1[1], point2[0], point2[1])
+print("Manhattan distance:", distance)
+
+STEP = np.array([[1, 0], [-1, 0], [0, 1], [0, -1]])
+
 
 def bomb_effect(pos):
-        '''
-        calculate the effectivenes of a bomb at position pos
+    '''
+    calculate the effectivenes of a bomb at position pos
 
-        :param pos: position of bomb (x,y)
-        '''
-        destroyed_crates = 0
-        for direction in STEP:
-            for length in range(1, 4):
-                beam = direction*length + pos
-                obj = field[beam[0], beam[1]]
-                if obj == -1:
-                    break
-                if (obj == 1) and future_explosion_map[beam[0], beam[1]]==1: # we will ge the crate destroyed
-                    destroyed_crates += 1
-        return destroyed_crates
+    :param pos: position of bomb (x,y)
+    '''
+    destroyed_crates = 0
+    for direction in STEP:
+        for length in range(1, 4):
+            beam = direction * length + pos
+            obj = field[beam[0], beam[1]]
+            if obj == -1:
+                break
+            # TODO unresloved future_exploision_map
+            if (obj == 1) and future_explosion_map[beam[0], beam[1]] == 1:  # we will ge the crate destroyed
+                destroyed_crates += 1
+    return destroyed_crates
 
-import numpy as np
 
 def calculate_bomb_effectiveness(game_state, bomb_position):
     # Define constants for tile types
@@ -76,6 +93,7 @@ def manhattan_distance(point1, point2):
     x2, y2 = point2
     return abs(x1 - x2) + abs(y1 - y2)
 
+
 def calculate_manhattan_distances(self_position, others_positions):
     """
     Calculate the Manhattan distances from the self agent to other agents.
@@ -89,6 +107,7 @@ def calculate_manhattan_distances(self_position, others_positions):
     """
     distances = [manhattan_distance(self_position, agent_position) for agent_position in others_positions]
     return distances
+
 
 def calculate_distances_to_coins(game_state):
     """
@@ -105,6 +124,7 @@ def calculate_distances_to_coins(game_state):
     distances = [manhattan_distance(player_position, coin_position) for coin_position in coin_positions]
     return distances
 
+
 def calculate_distances_to_other_agents(game_state):
     """
     Calculate Manhattan distances from the player's position to all other agents.
@@ -119,6 +139,7 @@ def calculate_distances_to_other_agents(game_state):
     other_agents_positions = [agent[3] for agent in game_state['others']]
     distances = [manhattan_distance(player_position, agent_position) for agent_position in other_agents_positions]
     return distances
+
 
 def calculate_danger_level(game_state):
     """
