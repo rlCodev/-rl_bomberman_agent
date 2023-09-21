@@ -8,7 +8,7 @@ import os
 import events as e
 import numpy as np
 from torch import nn
-from torch.optim import AdamW, SGD
+from torch.optim import AdamW
 from .MLP import MLP
 import random
 from .utils import action_index_to_string, action_string_to_index
@@ -34,7 +34,7 @@ Transition = namedtuple('Transition',
                         ('state', 'action', 'next_state', 'reward'))
 
 # Hyper parameters -- TODO modify/optimize
-TRANSITION_HISTORY_SIZE = 2000  # keep only ... last transitions
+TRANSITION_HISTORY_SIZE = 1000  # keep only ... last transitions
 RECORD_ENEMY_TRANSITIONS = 1.0  # record enemy transitions with probability ...
 
 # BATCH_SIZE is the number of transitions sampled from the replay buffer
@@ -48,12 +48,15 @@ BATCH_SIZE = 120
 # Discound factor or gamma
 DISCOUNT_FACTOR = 0.99
 EPS_START = 0.99
-EPS_END = 0.1
+EPS_END = 0.3
 STATIC_EPS = 0.1
 EPS_DECAY_FACTOR = 1000000
 TAU = 0.001
 LEARNING_RATE = 0.0001
 NUM_EPISODES = 10000
+TARGET_UPDATE_STEPS = 100
+
+REGULARISATION = 0.0001
 
 ACTIONS = ['UP', 'RIGHT', 'DOWN', 'LEFT', 'WAIT', 'BOMB']
 
@@ -111,7 +114,7 @@ def setup_training(self):
     self.memory = ReplayMemory(TRANSITION_HISTORY_SIZE)
     self.t = 0
 
-    self.bomb_buffer = 0
+    self.target_update_counter = 0
 
 def game_events_occurred(self, old_game_state: dict, self_action: str, new_game_state: dict, events: List[str]):
     """
@@ -225,20 +228,20 @@ def reward_from_events(self, events: List[str], new_game_state: dict) -> int:
     #       Die -300
     game_rewards = {
         e.COIN_COLLECTED: 500,
-        e.CRATE_DESTROYED: 100,
-        e.INVALID_ACTION: -2,
-        e.KILLED_OPPONENT: 100,
+        e.CRATE_DESTROYED: 50,
+        e.INVALID_ACTION: -50,
+        e.KILLED_OPPONENT: 200,
         e.GOT_KILLED: -300,
         e.KILLED_SELF: -300,
-        e.BOMB_DROPPED: 1,
+        e.BOMB_DROPPED: 5,
     }
 
     made_action = {
-        e.MOVED_LEFT: -1,
-        e.MOVED_RIGHT: -1,
-        e.MOVED_UP: -1,
-        e.MOVED_DOWN: -1,
-        e.WAITED: -1,
+        e.MOVED_LEFT: 1,
+        e.MOVED_RIGHT: 1,
+        e.MOVED_UP: 1,
+        e.MOVED_DOWN: 1,
+        e.WAITED: -20,
     }
 
     reward_sum = 0
@@ -261,14 +264,14 @@ def reward_from_events(self, events: List[str], new_game_state: dict) -> int:
     return reward_sum
 
 def update_model(self):
-    target_net_state_dict = self.target_net.state_dict()
-    policy_net_state_dict = self.policy_net.state_dict()
-    for key in policy_net_state_dict:
-        target_net_state_dict[key] = policy_net_state_dict[key]*TAU + target_net_state_dict[key]*(1-TAU)
-    self.target_net.load_state_dict(target_net_state_dict)
+    # target_net_state_dict = self.target_net.state_dict()
+    # policy_net_state_dict = self.policy_net.state_dict()
+    # for key in policy_net_state_dict:
+    #     target_net_state_dict[key] = policy_net_state_dict[key]*TAU + target_net_state_dict[key]*(1-TAU)
+    # self.target_net.load_state_dict(target_net_state_dict)
 
     # Based on https://pytorch.org/tutorials/intermediate/reinforcement_q_learning.html
-    self.optimizer = AdamW(self.policy_net.parameters(), lr=LEARNING_RATE, amsgrad=True)
+    self.optimizer = AdamW(self.policy_net.parameters(), lr=LEARNING_RATE, amsgrad=True, weight_decay=REGULARISATION)
     if len(self.memory) < BATCH_SIZE:
         return
     transitions =self.memory.sample(BATCH_SIZE)
@@ -308,13 +311,21 @@ def update_model(self):
     loss = criterion(state_action_values, expected_state_action_values.unsqueeze(1))
     self.losses.append(loss)
 
-    print(f"Episode {len(self.episode_durations)} Loss: {loss.detach().numpy().item()}")
+    # print(f"Episode {len(self.episode_durations)} Loss: {loss.detach().numpy().item()}")
     # Optimize the model
     self.optimizer.zero_grad()
     loss.backward()
     # In-place gradient clipping
     torch.nn.utils.clip_grad_value_(self.policy_net.parameters(), 100)
     self.optimizer.step()
+
+    self.target_update_counter += 1
+    if self.target_update_counter % TARGET_UPDATE_STEPS == 0:
+        # Update the target model every n_target_update_steps steps
+        target_net_state_dict = self.policy_net.state_dict()
+        self.target_net.load_state_dict(target_net_state_dict)
+        self.target_net.eval()
+        self.target_update_counter = 0
 
 def plot_durations(self, gamestate, show_result=False):
     fig = plt.figure(1)
