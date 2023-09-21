@@ -216,38 +216,6 @@ def reward_from_events(self, events: List[str], new_game_state: dict) -> int:
     Here you can modify the rewards your agent get so as to en/discourage
     certain behavior.
     """
-    #       Kill a player 100
-    #       Break a wall 30
-    #       Perform action -1
-    #       Perform impossible action -2
-    #       Die -300
-    # game_rewards = {
-    #     e.COIN_COLLECTED: 300,
-    #     e.CRATE_DESTROYED: 30,
-    #     e.INVALID_ACTION: -2,
-    #     e.KILLED_OPPONENT: 100,
-    #     e.GOT_KILLED: -300,
-    #     e.KILLED_SELF: -300,
-    #     e.WAITED: -5,
-    #     e.MOVED_DOWN: -1,
-    #     e.MOVED_LEFT: -1,
-    #     e.MOVED_RIGHT: -1,
-    #     e.MOVED_UP: -1,
-    #     e.BOMB_DROPPED: 1,
-    # }
-
-    # reward_sum = 0
-    # for event in events:
-    #     if event in game_rewards:
-    #         reward_sum += game_rewards[event]
-    # # TODO: Check if agent in danger zone
-    # self.logger.info(f"Awarded {reward_sum} for events {', '.join(events)}")
-    # return reward_sum
-    #       Kill a player 100
-    #       Break a wall 30
-    #       Perform action -1
-    #       Perform impossible action -2
-    #       Die -300
     game_rewards = {
         e.COIN_COLLECTED: 500,
         e.CRATE_DESTROYED: 30,
@@ -284,32 +252,6 @@ def reward_from_events(self, events: List[str], new_game_state: dict) -> int:
             reward_sum += 10
 
     return reward_sum
-
-# def update_model(self, old_game_state: dict, self_action: str, new_game_state: dict, events: List[str]):
-#     reward = reward_from_events(self, events)
-#     self.transitions.append(
-#         Transition(state_to_features(old_game_state), self_action, state_to_features(new_game_state), reward))
-
-#     # Add batch dimension
-#     old_state_features = torch.tensor(state_to_features(old_game_state), dtype=torch.float32).unsqueeze(0)
-#     new_state_features = torch.tensor(state_to_features(new_game_state), dtype=torch.float32).unsqueeze(0)
-
-#     q_values_old = self.model(old_state_features)
-#     q_values_new = self.model(new_state_features)
-#     max_q_new = torch.max(q_values_new).detach()  # Max Q-value for the next state
-#     # Calculate target Q-value using Q-learning update
-#     target_q_value = reward + self.discount_factor * max_q_new
-
-#     # Compute the loss
-#     action_index = ACTIONS.index(self_action)
-#     loss = self.loss_function(q_values_old[0][action_index], target_q_value)
-#     print(f"Loss: {loss}")
-#     self.losses.append(loss)
-
-#     # Backpropagation and optimization
-#     self.optimizer.zero_grad()
-#     loss.backward()
-#     self.optimizer.step()
 
 def update_model(self):
     target_net_state_dict = self.target_net.state_dict()

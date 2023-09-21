@@ -1,8 +1,79 @@
 import numpy as np
 
-STEP = np.array([[1,0], [-1,0], [0,1], [0,-1]])
+# Right, Left, Down, Up, Wait
+STEP = np.array([[1,0], [-1,0], [0,1], [0,-1], [0,0]])
 
-def bomb_effect(pos):
+def state_to_features_matrix(game_state, tiles_explored_set):
+    position = game_state['self'][3]
+    feature_matrix = []
+
+    for step in STEP:
+        move_coords = position + step
+        move_feature_vector = []
+
+        # check invalid actions
+        move_feature_vector.append(invalid_action(move_coords, game_state))
+
+        # get distance to nearest coin
+        move_feature_vector.append(distance_to_coin(move_coords, game_state))
+
+        # get distance to nearest opponent
+        move_feature_vector.append(distance_to_opponent(move_coords, game_state))
+
+        # get number of tiles explored
+        move_feature_vector.append(tiles_explored(move_coords, game_state, tiles_explored_set))
+
+        # get danger
+        # TODO
+
+        # get certain death
+        # TODO
+
+        # get bomb effect
+        move_feature_vector.append(bomb_effect(move_coords, game_state))
+
+        # check for chained invalid actions 
+
+        # check for backtracked moves
+        
+
+def invalid_action(position, game_state):
+    if game_state['field'][position] == 0:
+        return 1
+    else:
+        return -1
+
+def distance_to_coin(position, game_state):
+    # Returns distance of nearest coin for each step and for the current position respectively
+    delta_coins = {}
+    for coin in game_state['coins']:
+        delta_coins[coin] = manhattan_distance(position, coin)
+    nearest_coins = sorted(delta_coins.items(), key=lambda x:x[1])
+    return nearest_coins[0][1]
+
+def distance_to_opponent(position, game_state):
+    # Returns distance of nearest opponents for each step and for the current position respectively
+    opponents = [player[1] for player in game_state['others']]
+    return nearest_distance(position, opponents)
+
+# helper function to calculate the nearest distance to a list of coordinates
+def nearest_distance(position, coordinates):
+    distance = 100
+    for coord in coordinates:
+        if manhattan_distance(position, coord) < distance:
+            distance = manhattan_distance(position, coord)
+    return distance
+
+def tiles_explored(position, game_state, tiles_explored_set):
+    if game_state['field'][position] == 0:
+        if position not in tiles_explored_set:
+            return 1
+        else:
+            return 0
+    else:
+        return -1
+
+def bomb_effect(position, game_state):
         '''
         calculate the effectivenes of a bomb at position pos
 
@@ -10,16 +81,14 @@ def bomb_effect(pos):
         '''
         destroyed_crates = 0
         for direction in STEP:
-            for length in range(1, 4):
-                beam = direction*length + pos
-                obj = field[beam[0], beam[1]]
-                if obj == -1:
+            for radius in range(1, 4):
+                explosion = position + direction*radius
+                tile = game_state['field'][explosion[0], explosion[1]]
+                if tile == -1:
                     break
-                if (obj == 1) and future_explosion_map[beam[0], beam[1]]==1: # we will ge the crate destroyed
+                if (tile == 1): # we will ge the crate destroyed
                     destroyed_crates += 1
         return destroyed_crates
-
-import numpy as np
 
 def calculate_bomb_effectiveness(game_state, bomb_position):
     # Define constants for tile types
@@ -75,50 +144,6 @@ def manhattan_distance(point1, point2):
     x1, y1 = point1
     x2, y2 = point2
     return abs(x1 - x2) + abs(y1 - y2)
-
-def calculate_manhattan_distances(self_position, others_positions):
-    """
-    Calculate the Manhattan distances from the self agent to other agents.
-
-    Args:
-    self_position (tuple): The coordinates of the self agent as (x, y).
-    others_positions (list): A list of tuples, each containing the coordinates of another agent as (x, y).
-
-    Returns:
-    list: A list of Manhattan distances from the self agent to each of the other agents.
-    """
-    distances = [manhattan_distance(self_position, agent_position) for agent_position in others_positions]
-    return distances
-
-def calculate_distances_to_coins(game_state):
-    """
-    Calculate Manhattan distances from the player's position to all coins.
-
-    Args:
-    game_state (dict): The current game state.
-
-    Returns:
-    list: A list of distances from the player to all coins.
-    """
-    player_position = game_state['self'][3]
-    coin_positions = game_state['coins']
-    distances = [manhattan_distance(player_position, coin_position) for coin_position in coin_positions]
-    return distances
-
-def calculate_distances_to_other_agents(game_state):
-    """
-    Calculate Manhattan distances from the player's position to all other agents.
-
-    Args:
-    game_state (dict): The current game state.
-
-    Returns:
-    list: A list of distances from the player to all other agents.
-    """
-    player_position = game_state['self'][3]
-    other_agents_positions = [agent[3] for agent in game_state['others']]
-    distances = [manhattan_distance(player_position, agent_position) for agent_position in other_agents_positions]
-    return distances
 
 def calculate_danger_level(game_state):
     """
