@@ -13,6 +13,7 @@ from torch.optim import AdamW, SGD
 from .MLP import MLP
 import random
 from .utils import action_index_to_string, action_string_to_index
+import helper
 
 class ReplayMemory(object):
 
@@ -216,7 +217,8 @@ def end_of_round(self, last_game_state: dict, last_action: str, events: List[str
     #     math.exp(-1. * self.steps_done / EPS_DECAY_FACTOR)
     self.eps_threshold = EPS_START * (1 - (len(self.episode_durations) / NUM_EPISODES))
 
-def reward_from_events(self, events: List[str], new_game_state: dict) -> int:
+
+def reward_from_events(self, events: List[str], old_game_state: dict, self_action: str, new_game_state: dict) -> int:
     """
     *This is not a required function, but an idea to structure your code.*
 
@@ -233,13 +235,40 @@ def reward_from_events(self, events: List[str], new_game_state: dict) -> int:
         e.BOMB_DROPPED: 5,
     }
 
-    made_action = {
-        e.MOVED_LEFT: 1,
-        e.MOVED_RIGHT: 1,
-        e.MOVED_UP: 1,
-        e.MOVED_DOWN: 1,
-        e.WAITED: -20,
-    }
+    reward_sum = 0
+
+    new_features = helper.state_to_features_matrix(self, new_game_state)
+    old_features = helper.state_to_features_matrix(self, old_game_state)
+
+    # Punish for choosing invalid actions
+    if e.INVALID_ACTION in events:
+        reward_sum += game_rewards[e.INVALID_ACTION]
+
+    # Reward / punish for moving towards / away from coins
+    coin_reward_factor = 10
+    distance_to_coins_old = old_features[4][0]
+    distance_to_coins_new = new_features[4][0]
+
+    if distance_to_coins_new < distance_to_coins_old:
+        reward_sum += (distance_to_coins_old - distance_to_coins_new) * coin_reward_factor
+    else:
+        reward_sum -= (distance_to_coins_new - distance_to_coins_old) * coin_reward_factor
+
+    # Reward / punish for moving towards / away from enemies
+
+
+    # Reward for exploring a new tile
+
+    # Reward for moving away from danger
+
+    # Punish for choosing move resulting in certain death
+
+    # Reward for placing bomb when Bomb effectiveness is max
+
+    # Punish for chaining invalid actions
+
+    # Punish for backtracking
+
 
     reward_sum = 0
     for event in events:
@@ -247,8 +276,6 @@ def reward_from_events(self, events: List[str], new_game_state: dict) -> int:
             self.coins_collected += 1
         if event in game_rewards:
             reward_sum += game_rewards[event]
-        if event in made_action:
-            reward_sum += made_action[event]
     # TODO: Check if agent in danger zone
     self.logger.info(f"Awarded {reward_sum} for events {', '.join(events)}")
     
