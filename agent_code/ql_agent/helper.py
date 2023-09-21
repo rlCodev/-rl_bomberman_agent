@@ -1,4 +1,6 @@
 import numpy as np
+from collections import deque
+import settings as s
 
 STEP = np.array([[1,0], [-1,0], [0,1], [0,-1]])
 
@@ -144,65 +146,148 @@ def manhattan_distance(point1, point2):
     x2, y2 = point2
     return abs(x1 - x2) + abs(y1 - y2)
 
-def calculate_danger_level(game_state):
-    """
-    Calculate the danger level based on the distance to the closest tile that would be hit by an exploding bomb
-    considering that bomb rays are stopped by walls.
-
-    Args:
-    game_state (dict): The current game state.
-
-    Returns:
-    float: A danger level between 0 and 1, where 0 means no danger, and 1 means imminent danger.
-    """
-    player_position = game_state['self'][3]
+def get_extended_explosion_map(game_state):
     field = game_state['field']
     bombs = game_state['bombs']
-
-    if not bombs:
-        return 0.0  # No bombs on the field, no danger.
-
-    min_distance_to_bomb = float('inf')
-
-    # Iterate through all active bombs to find the nearest tile hit by an exploding bomb.
+    extended_explosion_map = np.full_like(field, -1)
+    
     for bomb_position, countdown in bombs:
-        distance = manhattan_distance(player_position, bomb_position)
+        extended_explosion_map[bomb_position[0], bomb_position[1]] = countdown
 
-        # Calculate the actual bomb ray radius in each direction
-        up_radius, down_radius, left_radius, right_radius = 0, 0, 0, 0
+        for length in range(1, s.BOMB_POWER + 1):
+            # Calculate the possible explosion positions
+            beams = bomb_position + STEP * length
+            
+            # Clip the positions to stay within the field
+            beams = np.clip(beams, 0, np.array(field.shape) - 1)
+            
+            # Get objects at the possible explosion positions
+            objects = field[beams[:, 0], beams[:, 1]]
+            
+            # Update the explosion map where necessary
+            update_mask = (objects != -1) & (extended_explosion_map[beams[:, 0], beams[:, 1]] < countdown)
+            extended_explosion_map[beams[update_mask][:, 0], beams[update_mask][:, 1]] = countdown
 
-        for r in range(1, countdown + 1):
-            if bomb_position[1] - r >= 0 and field[bomb_position[0]][bomb_position[1] - r] != -1:
-                up_radius = r
-            else:
-                break
+    return extended_explosion_map
 
-        for r in range(1, countdown + 1):
-            if bomb_position[1] + r < field.shape[1] and field[bomb_position[0]][bomb_position[1] + r] != -1:
-                down_radius = r
-            else:
-                break
+# def get_extended_explosion_map(game_state):
+#     field = game_state['field']
+#     bombs = game_state['bombs']
+#     extended_explosion_map = np.full_like(field, -1)
+    
+#     for bomb_position, countdown in bombs:
+#         extended_explosion_map[bomb_position[0], bomb_position[1]] = countdown
 
-        for r in range(1, countdown + 1):
-            if bomb_position[0] - r >= 0 and field[bomb_position[0] - r][bomb_position[1]] != -1:
-                left_radius = r
-            else:
-                break
+#         for length in range(1, s.BOMB_POWER + 1):
+#             # Calculate the possible explosion positions
+#             beams = bomb_position + STEP * length
+            
+#             # Clip the positions to stay within the field
+#             beams = np.clip(beams, 0, np.array(field.shape) - 1)
+            
+#             # Get objects at the possible explosion positions
+#             objects = field[beams[:, 0], beams[:, 1]]
+            
+#             # Update the explosion map where necessary
+#             update_mask = (objects != -1) & (extended_explosion_map[beams[:, 0], beams[:, 1]] < countdown)
+#             extended_explosion_map[beams[update_mask][:, 0], beams[update_mask][:, 1]] = countdown
 
-        for r in range(1, countdown + 1):
-            if bomb_position[0] + r < field.shape[0] and field[bomb_position[0] + r][bomb_position[1]] != -1:
-                right_radius = r
-            else:
-                break
+#     return extended_explosion_map
 
-        # Find the minimum distance to the nearest tile hit by any bomb in all directions
-        min_radius = min(up_radius, down_radius, left_radius, right_radius)
-        if distance <= min_radius:
-            return 1.0  # Imminent danger, as player is within blast radius.
+def get_extended_explosion_map(game_state):
+    field = game_state['field']
+    bombs = game_state['bombs'].copy()
+    extended_explosion_map = np.full_like(field, -1)
+    
+    for bomb_position, countdown in bombs:
+        extended_explosion_map[bomb_position[0], bomb_position[1]] = countdown
+        
+        for direction in STEP:
+            for length in range(1, s.BOMB_POWER + 1):
+                beam = direction * length + np.array(bomb_position)
+                obj = field[beam[0], beam[1]]
+                
+                if obj == -1:
+                    break
+                if extended_explosion_map[beam[0], beam[1]] < countdown:
+                    extended_explosion_map[beam[0], beam[1]] = countdown
+                else:
+                    break  # No need to continue updating if countdown is not greater
+    return extended_explosion_map
 
-        if distance < min_distance_to_bomb:
-            min_distance_to_bomb = distance
+def get_danger(field, bombs, position, direction):
+    extended_explosion_map = np.zeros_like(field)
+    max_danger = s.BOMB_POWER + 1
+    for bomb_position, countdown in bombs:
+        extended_explosion_map[bomb_position[0], bomb_position[1]] = max_danger
+        
+        for direction in STEP:
+            for length in range(1, s.BOMB_POWER + 1):
+                beam = direction * length + np.array(bomb_position)
+                obj = field[beam[0], beam[1]]
+                
+                if obj == -1:
+                    break
+                if extended_explosion_map[beam[0], beam[1]] < max_danger - length:
+                    extended_explosion_map[beam[0], beam[1]] = max_danger - length
+                else:
+                    break  # No need to continue updating if countdown is not greater
+    new_agent_position = position + direction
+    return extended_explosion_map[new_agent_position[0], new_agent_position[1]]
 
-    # Scale the danger level between 0 and 1 based on the distance to the nearest tile hit by an exploding bomb.
-    danger_level = min_distance_to_bomb / field.shape[0]  # Assuming field width == height
-    return danger_level
+
+def certain_death(game_state, direction):
+    # Get the extended explosion map
+    extended_explosion_map = get_extended_explosion_map(game_state)
+    
+    # Extract relevant information from the game state
+    self_x, self_y = game_state['self'][3] + direction
+    time_to_explosion = extended_explosion_map[self_x, self_y]
+
+    # Get closest safe tile without explosion
+    if time_to_explosion == -1:
+        return False
+    else:
+        # Get coordinates of the closest safe tile
+        safe_tiles = np.argwhere(extended_explosion_map == -1)
+        closest_safe_tile = closest_safe_tile[np.argmin(np.sum(np.abs(safe_tiles - [self_x, self_y]), axis=1))]
+
+        # Calculate steps to take to reach the closest safe tile considering walls and crates
+        return (not tile_reachable(game_state, closest_safe_tile, extended_explosion_map))
+        
+
+def tile_reachable(game_state, tile, extended_explosion_map):
+    # Extract relevant information from the game state
+    field = game_state['field']
+    self_x, self_y = game_state['self'][3]
+
+
+    found_tile = False
+    steps = 0
+
+    while not found_tile:
+        valid_steps = get_valid_actions((self_x, self_y), game_state)
+        # Get step with minimum distance to the tile
+        min_step = valid_steps[np.argmin(np.sum(np.abs(np.array(valid_steps) - np.array(tile)), axis=1))]
+        self_x, self_y = self_x + min_step[0], self_y + min_step[1]
+        # Update explosion map -1 for each tile where not -1
+        if extended_explosion_map[self_x, self_y] == 0:
+            return False
+        if (self_x, self_y) == tile and extended_explosion_map[self_x, self_y] != 0:
+            return True
+
+        extended_explosion_map[extended_explosion_map != -1] -= 1
+        steps += 1
+        
+
+def get_valid_actions(position, game_state):
+    valid_actions = []
+
+    for (dx, dy) in STEP.items():
+        new_position = (position[0] + dx, position[1] + dy)
+
+        # Check if the action is valid using the invalid_action method
+        if invalid_action(new_position, game_state) == 1:
+            valid_actions.append((dx, dy))
+
+    return valid_actions
