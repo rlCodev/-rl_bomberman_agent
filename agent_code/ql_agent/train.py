@@ -14,6 +14,7 @@ from .MLP import MLP
 import random
 from .utils import action_index_to_string, action_string_to_index
 import agent_code.ql_agent.helper as helper
+import agent_code.ql_agent.hyperparameter as c
 
 class ReplayMemory(object):
 
@@ -41,35 +42,6 @@ class ReplayMemory(object):
 Transition = namedtuple('Transition',
                         ('state', 'action', 'next_state', 'reward'))
 
-# Hyper parameters -- TODO modify/optimize
-TRANSITION_HISTORY_SIZE = 20  # keep only ... last transitions
-RECORD_ENEMY_TRANSITIONS = 1.0  # record enemy transitions with probability ...
-
-# BATCH_SIZE is the number of transitions sampled from the replay buffer
-# DISCOUNT_FACTOR is the discount factor as mentioned in the previous section
-# EPS_START is the starting value of epsilon
-# EPS_END is the final value of epsilon
-# EPS_DECAY controls the rate of exponential decay of epsilon, higher means a slower decay
-# TAU is the update rate of the target network
-# LEARNING_RATE is the learning rate of the ``AdamW`` optimizer
-BATCH_SIZE = 12
-# Discound factor or gamma
-DISCOUNT_FACTOR = 0.99
-EPS_START = 0.99
-EPS_END = 0.4
-STATIC_EPS = 0.1
-EPS_DECAY_FACTOR = 1000000
-TAU = 0.001
-LEARNING_RATE = 0.0001
-
-NUM_EPISODES = 10000
-
-ACTIONS = ['UP', 'RIGHT', 'DOWN', 'LEFT', 'WAIT', 'BOMB']
-
-# Events
-PLACEHOLDER_EVENT = "PLACEHOLDER"
-
-
 def setup_training(self):
     """
     Initialise self for training purpose.
@@ -86,11 +58,8 @@ def setup_training(self):
     # Track visited tiles for giving rewards for visiting many tiles
     self.coins_collected = 0
     # Setup models
-    input_size = 30
-    hidden_size = 20
-    output_size = len(ACTIONS)
-    self.policy_net = MLP(input_size, hidden_size, output_size)
-    self.target_net = MLP(input_size, hidden_size, output_size)
+    self.policy_net = MLP(c.INPUT_SIZE, c.HIDDEN_SIZE, c.OUTPUT_SIZE)
+    self.target_net = MLP(c.INPUT_SIZE, c.HIDDEN_SIZE, c.OUTPUT_SIZE)
     if os.path.isfile("custom_mlp_policy_model.pth"):
         self.policy_net.load_state_dict(torch.load('custom_mlp_policy_model.pth'))
         self.target_net.load_state_dict(torch.load('custom_mlp_target_model.pth'))
@@ -115,10 +84,9 @@ def setup_training(self):
             if len(coins) > 0:
                 self.episodes_coins_collected = coins
     self.episodes_round = 0
-    self.eps_threshold = EPS_START * (1 - (len(self.episode_durations) / NUM_EPISODES))
-    self.logger.info(f"Loaded {len(self.episode_durations)} training episodes from file")
+    self.eps_threshold = c.EPS_START * (1 - (len(self.episode_durations) / c.NUM_EPISODES))
     self.logger.info(f"Current epsilon threshold: {self.eps_threshold}")
-    self.memory = ReplayMemory(TRANSITION_HISTORY_SIZE)
+    self.memory = ReplayMemory(c.TRANSITION_HISTORY_SIZE)
     self.t = 0
 
 def game_events_occurred(self, old_game_state: dict, self_action: str, new_game_state: dict, events: List[str]):
@@ -151,7 +119,7 @@ def game_events_occurred(self, old_game_state: dict, self_action: str, new_game_
     self.episodes_round += 1
     # self.eps_threshold = EPS_END + (EPS_START - EPS_END) * \
     #     math.exp(-1. * self.steps_done / EPS_DECAY_FACTOR)
-    self.eps_threshold = EPS_START * (1 - (len(self.episode_durations) / NUM_EPISODES))
+    self.eps_threshold = c.EPS_START * (1 - (len(self.episode_durations) / c.NUM_EPISODES))
     self.steps_done += 1
     # print("Rewards: ", reward)
 
@@ -209,12 +177,14 @@ def end_of_round(self, last_game_state: dict, last_action: str, events: List[str
     # Save current training episodes to file
     with open('training_episodes.pkl', 'wb') as f:
         pickle.dump(self.episode_durations, f)
+    with open('training_coins_collected.pkl', 'wb') as f:
+        pickle.dump(self.episodes_coins_collected, f)
     # Clean memory after each round for preventing memory leakage
-    self.memory = ReplayMemory(TRANSITION_HISTORY_SIZE)
+    self.memory = ReplayMemory(c.TRANSITION_HISTORY_SIZE)
     # Update epsilon threshold for new round
     # self.eps_threshold = EPS_END + (EPS_START - EPS_END) * \
     #     math.exp(-1. * self.steps_done / EPS_DECAY_FACTOR)
-    self.eps_threshold = EPS_START * (1 - (len(self.episode_durations) / NUM_EPISODES))
+    self.eps_threshold = c.EPS_START * (1 - (len(self.episode_durations) / c.NUM_EPISODES))
 
 
 def reward_from_events(self, events: List[str], old_game_state: dict, self_action: str, new_game_state: dict) -> int:
@@ -240,9 +210,9 @@ def reward_from_events(self, events: List[str], old_game_state: dict, self_actio
     if e.INVALID_ACTION in events:
         reward_sum += game_rewards[e.INVALID_ACTION]
 
+    old_features = helper.state_to_features_matrix(self, old_game_state)
     if new_game_state is not None:
         new_features = helper.state_to_features_matrix(self, new_game_state)
-        old_features = helper.state_to_features_matrix(self, old_game_state)
 
     
 
@@ -325,6 +295,8 @@ def reward_from_events(self, events: List[str], old_game_state: dict, self_actio
 
 
     # Punish for backtracking
+
+    # Reward for coins collected
     for event in events:
         if event == e.COIN_COLLECTED:
             self.coins_collected += 1
@@ -339,14 +311,14 @@ def update_model(self):
     target_net_state_dict = self.target_net.state_dict()
     policy_net_state_dict = self.policy_net.state_dict()
     for key in policy_net_state_dict:
-        target_net_state_dict[key] = policy_net_state_dict[key]*TAU + target_net_state_dict[key]*(1-TAU)
+        target_net_state_dict[key] = policy_net_state_dict[key]*c.TAU + target_net_state_dict[key]*(1-c.TAU)
     self.target_net.load_state_dict(target_net_state_dict)
 
     # Based on https://pytorch.org/tutorials/intermediate/reinforcement_q_learning.html
-    self.optimizer = AdamW(self.policy_net.parameters(), lr=LEARNING_RATE, amsgrad=True)
-    if len(self.memory) < BATCH_SIZE:
+    self.optimizer = AdamW(self.policy_net.parameters(), lr=c.LEARNING_RATE, amsgrad=True)
+    if len(self.memory) < c.BATCH_SIZE:
         return
-    transitions =self.memory.sample(BATCH_SIZE)
+    transitions =self.memory.sample(c.BATCH_SIZE)
     batch = Transition(*zip(*transitions))
 
     # Compute a mask of non-final states and concatenate the batch elements
@@ -376,11 +348,11 @@ def update_model(self):
     # on the "older" target_net; selecting their best reward with max(1)[0].
     # This is merged based on the mask, such that we'll have either the expected
     # state value or 0 in case the state was final.
-    next_state_values = torch.zeros(BATCH_SIZE)
+    next_state_values = torch.zeros(c.BATCH_SIZE)
     with torch.no_grad():
         next_state_values[non_final_mask] = self.target_net(non_final_next_states).max(1)[0]
     # Compute the expected Q values
-    expected_state_action_values = (next_state_values * DISCOUNT_FACTOR) + reward_batch
+    expected_state_action_values = (next_state_values * c.DISCOUNT_FACTOR) + reward_batch
 
     # Compute Huber loss
     criterion = nn.SmoothL1Loss()

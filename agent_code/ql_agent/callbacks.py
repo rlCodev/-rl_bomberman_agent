@@ -9,9 +9,7 @@ import numpy as np
 import torch
 from .utils import action_index_to_string, action_string_to_index
 from ..rule_based_agent import callbacks as rule_based_agent
-
-ACTIONS = ['UP', 'RIGHT', 'DOWN', 'LEFT', 'WAIT', 'BOMB']
-STEP = np.array([(1,0), (-1,0), (0,1), (0,-1), (0,0)])
+import agent_code.ql_agent.hyperparameter as c
 
 def setup(self):
     """
@@ -35,24 +33,20 @@ def setup(self):
     #     self.logger.info("Loading model from saved state.")
     #     with open("my-saved-model.pt", "rb") as file:
     #         self.model = pickle.load(file)
-    input_size = 30
-    hidden_size = 20
-    output_size = len(ACTIONS)
 
     # For rule based inference learnign:
     self.bomb_buffer = 0
     self.current_round = 0
 
     self.tiles_visited = set()
-    self.coordinate_history = deque([], 5)
+    self.coordinate_history = deque([], 10)
 
     if not os.path.isfile("custom_mlp_policy_model.pth") and not self.train:
         # Size of feature representation below
-        self.policy_net = MLP(input_size, hidden_size, output_size)
+        self.policy_net = MLP(c.INPUT_SIZE, c.HIDDEN_SIZE, c.OUTPUT_SIZE)
     elif os.path.isfile("custom_mlp_policy_model.pth") and not self.train:
-        self.logger.info("Loading MLP from saved state.")
         # Create an instance of the custom MLP model
-        self.policy_net = MLP(input_size, hidden_size, output_size)
+        self.policy_net = MLP(c.INPUT_SIZE, c.HIDDEN_SIZE, c.OUTPUT_SIZE)
 
         # Load the saved model state dictionary
         # self.policy_net = torch.load('custom_mlp_policy_model.pth')
@@ -93,21 +87,37 @@ def act(self, game_state: dict) -> str:
     #         return np.random.choice(ACTIONS, p=[.2, .2, .2, .2, .1, .1]) 
     action_chosen = None
     if self.train and random.random() < self.eps_threshold:
-        self.logger.debug("Random action.")
         # 80%: walk in any direction. 10% wait. 10% bomb.
         # return np.random.choice(ACTIONS, p=[.2, .2, .2, .2, .1, .1])
-        rule_based_action = rule_based_agent.act(self, game_state)
-        rule_based_choice = np.random.choice([1,2])
-        if rule_based_action is not None and rule_based_choice == 1: #and random.random() < self.eps_threshold:
-            action_chosen = rule_based_action
-        else:
-            action_chosen = np.random.choice(ACTIONS, p=[.2, .2, .2, .2, .1, .1]) 
+        # rule_based_action = rule_based_agent.act(self, game_state)
+        # rule_based_choice = np.random.choice([1,2])
+        # if rule_based_action is not None: #and rule_based_choice == 1:
+        #     action_chosen = rule_based_action
+        # else:
+        action_chosen = np.random.choice(c.ACTIONS, p=[.2, .2, .2, .2, .1, .1]) 
     else:
         with torch.no_grad():
             state = torch.tensor(state_to_features(self, game_state), dtype=torch.float32).unsqueeze(0)  # Add batch dimension
             prediction = self.policy_net(state).max(1)[1].view(1, 1).item()
             action_chosen = action_index_to_string(prediction)
+
+            # If agent has been in the same location three times recently, it's a loop
+            if action_chosen != 'BOMB':
+                try:
+                    x, y = game_state['self'][3] + helper.get_step(action_chosen)
+                except:
+                    x, y = game_state['self'][3]
+                if self.coordinate_history.count((x, y)) > 4:
+                    self.logger.debug("LOOP DETECTED")
+                    try:
+                        valid_actions = helper.get_valid_action_strings(game_state)
+                        valid_actions.remove(action_chosen)
+                        action_chosen = np.random.choice(valid_actions)
+                    except:
+                        action_chosen = 'DOWN'
             
+                new_pos = tuple(helper.get_step(action_chosen) + game_state['self'][3])
+                self.coordinate_history.append(new_pos)
             # action_index = self.policy_net(state).argmax().item()
             # print(action_index)
             # chosen_action = ACTIONS[action_index]
@@ -117,18 +127,11 @@ def act(self, game_state: dict) -> str:
             # chosen_action = ACTIONS[action_index]
     self.logger.info(f'Predicted action: {action_chosen}')
     if action_chosen != 'BOMB':
-        new_pos = helper.get_step(action_chosen) + game_state['self'][3]
-        self.tiles_visited.add(tuple(new_pos))
-
-     # If agent has been in the same location three times recently, it's a loop
-    x, y = game_state['self'][3]
-    self.coordinate_history.append((x, y))
-    if self.coordinate_history.count((x, y)) > 4:
-        try:
-            valid_actions = helper.get_valid_action_strings(game_state)
-            action_chosen = np.random.choice(valid_actions)
-        except:
-            action_chosen = 'WAIT'
+        new_pos = tuple(helper.get_step(action_chosen) + game_state['self'][3])
+        self.tiles_visited.add(new_pos)
+        
+    self.logger.info(f'Took action: {action_chosen}')
+    
     return action_chosen
 
 
