@@ -13,7 +13,7 @@ from torch.optim import AdamW, SGD
 from .MLP import MLP
 import random
 from .utils import action_index_to_string, action_string_to_index
-import helper
+import agent_code.ql_agent.helper as helper
 
 class ReplayMemory(object):
 
@@ -143,7 +143,7 @@ def game_events_occurred(self, old_game_state: dict, self_action: str, new_game_
     # new_game_state_feature = state_to_features(new_game_state)
     old_game_state_feature = torch.tensor(state_to_features(self, old_game_state), dtype=torch.float32).unsqueeze(0)
     new_game_state_feature = torch.tensor(state_to_features(self, new_game_state), dtype=torch.float32).unsqueeze(0)
-    rewards = reward_from_events(self, events, new_game_state)
+    rewards = reward_from_events(self, events, old_game_state, self_action, new_game_state)
     # Put rewards into tensor
     reward = torch.tensor([rewards])
     action = torch.tensor([[action_string_to_index(self_action)]], dtype=torch.long)
@@ -184,7 +184,7 @@ def end_of_round(self, last_game_state: dict, last_action: str, events: List[str
     # self.memory.append(
     #     Transition(state_to_features(last_game_state), last_action, None, reward_from_events(self, events)))
     last_game_state_feature = torch.tensor(state_to_features(self, last_game_state), dtype=torch.float32).unsqueeze(0)
-    rewards = reward_from_events(self, events, last_game_state)
+    rewards = reward_from_events(self, events, last_game_state, last_action, None)
     # Put rewards into tensor
     reward = torch.tensor([rewards])
     action = torch.tensor([[action_string_to_index(last_action)]], dtype=torch.long)
@@ -196,7 +196,7 @@ def end_of_round(self, last_game_state: dict, last_action: str, events: List[str
     self.episode_durations.append(self.episodes_round)
     self.episodes_coins_collected.append(self.coins_collected)
     self.episodes_round = 0
-    self.tiles_visited = []
+    self.tiles_visited = set()
     self.coins_collected = 0
     # Only plot every 20 episodes
     # if len(self.episode_durations) % 100 == 0:
@@ -236,83 +236,95 @@ def reward_from_events(self, events: List[str], old_game_state: dict, self_actio
 
     reward_sum = 0
 
-    new_features = helper.state_to_features_matrix(self, new_game_state)
-    old_features = helper.state_to_features_matrix(self, old_game_state)
-
     # Punish for choosing invalid actions
     if e.INVALID_ACTION in events:
         reward_sum += game_rewards[e.INVALID_ACTION]
 
-    # Reward / punish for moving towards / away from coins
-    if old_game_state['coins'] is not None:
-        coin_reward_factor = 10
-        distance_to_coins_old = old_features[4][0]
-        distance_to_coins_new = new_features[4][0]
-        coin_column = [row[0] for row in old_features[:4]]
-        if 0 in coin_column and e.COIN_COLLECTED in events:
-            reward_sum += 5 * coin_reward_factor
-        elif 0 in coin_column and e.COIN_COLLECTED not in events:
-            reward_sum -= 5 * coin_reward_factor
-        else:
-            if distance_to_coins_new < distance_to_coins_old:
-                reward_sum += (distance_to_coins_old - distance_to_coins_new) * coin_reward_factor
-            else:
-                reward_sum -= (distance_to_coins_new - distance_to_coins_old) * coin_reward_factor
+    if new_game_state is not None:
+        new_features = helper.state_to_features_matrix(self, new_game_state)
+        old_features = helper.state_to_features_matrix(self, old_game_state)
 
-    # Reward / punish for moving towards / away from enemies
-    enemy_reward_factor = 5
-    distance_to_enemies_old = old_features[4][1]
-    distance_to_enemies_new = new_features[4][1]
-
-    if distance_to_enemies_new < distance_to_enemies_old:
-        reward_sum += (distance_to_enemies_old - distance_to_enemies_new) * enemy_reward_factor
-    else:
-        reward_sum -= (distance_to_enemies_new - distance_to_enemies_old) * enemy_reward_factor
-
-    # Reward for exploring a new tile
-    if 'self' in new_game_state and len(new_game_state['self']) > 3:
-        if new_game_state['self'][3] not in self.tiles_visited:
-            # self.tiles_visited.append(new_game_state['self'][3])
-            reward_sum += 10
-
-    # Reward for moving away from danger
-    old_danger = old_features[4][3]
-    new_danger = new_features[4][3]
-    if new_danger < old_danger:
-        reward_sum += (old_danger - new_danger)*10
-    else:
-        reward_sum -= (new_danger - old_danger)*10
-
-    # Punish for choosing move resulting in certain death
-    old_certain_death = old_features[4][4]
-    new_certain_death = new_features[4][4]
-
-    if new_certain_death > old_certain_death:
-        reward_sum -= 100
-    else:
-        reward_sum += 100
     
 
-    # Reward for placing bomb when Bomb effectiveness is max
-    if(e.BOMB_DROPPED in events):
-        # Find out, if placing the bomb at the position we were standing in was the best option
-        max_bomb_effectiveness = old_features[0][6] 
-        index = 0
-        for row in old_features:
-            if row[6] >=  max_bomb_effectiveness:
-                max_bomb_effectiveness = row[6]
-                index = old_features.index(row)
+        # Reward / punish for moving towards / away from coins
+        if old_game_state['coins'] is not None:
+            coin_reward_factor = 10
+            distance_to_coins_old = old_features[4][0]
+            distance_to_coins_new = new_features[4][0]
+            coin_column = [row[0] for row in old_features[:4]]
+            if 0 in coin_column and e.COIN_COLLECTED in events:
+                reward_sum += 5 * coin_reward_factor
+            elif 0 in coin_column and e.COIN_COLLECTED not in events:
+                reward_sum -= 5 * coin_reward_factor
+            else:
+                if distance_to_coins_new < distance_to_coins_old:
+                    reward_sum += (distance_to_coins_old - distance_to_coins_new) * coin_reward_factor
+                else:
+                    reward_sum -= (distance_to_coins_new - distance_to_coins_old) * coin_reward_factor
 
-        if(index == 4):
+        # Reward / punish for moving towards / away from enemies
+        if new_game_state is not None:
+            enemy_reward_factor = 5
+            distance_to_enemies_old = old_features[4][1]
+            distance_to_enemies_new = new_features[4][1]
+
+            if distance_to_enemies_new < distance_to_enemies_old:
+                reward_sum += (distance_to_enemies_old - distance_to_enemies_new) * enemy_reward_factor
+            else:
+                reward_sum -= (distance_to_enemies_new - distance_to_enemies_old) * enemy_reward_factor
+
+        # Reward for exploring a new tile
+        if new_game_state is not None and 'self' in new_game_state and len(new_game_state['self']) > 3:
+            if new_game_state['self'][3] not in self.tiles_visited:
+                # self.tiles_visited.append(new_game_state['self'][3])
+                reward_sum += 10
+
+        # Reward for moving away from danger
+        old_danger = old_features[4][3]
+        new_danger = new_features[4][3]
+        if new_danger < old_danger:
+            reward_sum += (old_danger - new_danger)*10
+        else:
+            reward_sum -= (new_danger - old_danger)*10
+
+        # Punish for choosing move resulting in certain death
+        old_certain_death = old_features[4][4]
+        new_certain_death = new_features[4][4]
+
+        if new_certain_death > old_certain_death:
+            reward_sum -= 100
+        else:
+            reward_sum += 100
+        
+
+    # Reward for placing bomb when Bomb effectiveness is max
+    # if(e.BOMB_DROPPED in events):
+    #     # Find out, if placing the bomb at the position we were standing in was the best option
+    #     max_bomb_effectiveness = old_features[0][5] 
+    #     index = 0
+    #     for row in old_features:
+    #         if row[5] >=  max_bomb_effectiveness:
+    #             max_bomb_effectiveness = row[5]
+    #             index = np.where(row == old_features)[0]
+    #             # index = old_features.index(row)
+
+    #     if(index == 4):
+    #         reward_sum += 50
+
+
+    if e.BOMB_DROPPED in events:
+    # Find the row with the maximum value in column 5
+        max_row_index = np.argmax(old_features[:, 5])
+        # max_bomb_effectiveness = old_features[max_row_index, 5]
+
+        if max_row_index == 4:
             reward_sum += 50
+
 
     # Punish for chaining invalid actions
 
 
     # Punish for backtracking
-
-
-    reward_sum = 0
     for event in events:
         if event == e.COIN_COLLECTED:
             self.coins_collected += 1

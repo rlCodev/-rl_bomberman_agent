@@ -3,12 +3,11 @@ from collections import deque
 import settings as s
 
 STEP = np.array([(1,0), (-1,0), (0,1), (0,-1), (0,0)])
-ACTION_NAME = ['RIGHT', 'LEFT', 'UP', 'DOWN', 'WAIT']
+ACTION_NAME = ['DOWN', 'UP', 'RIGHT', 'LEFT', 'WAIT']
 
 def state_to_features_matrix(self, game_state):
     position = game_state['self'][3]
     feature_matrix = []
-    print("step feature")
     danger_map, extended_explosion_map = get_danger_map(game_state['field'], game_state['bombs'])
     for step in STEP:
         move_coords = position + step
@@ -374,7 +373,6 @@ def get_action_name(coord_change):
     return None
 
 def get_step(step_name):
-    print(ACTION_NAME, step_name)
     actions = np.array(ACTION_NAME)
     matching_indices = np.where(actions == step_name)[0]
     if matching_indices.size > 0:
@@ -392,5 +390,7 @@ def get_valid_action_strings(game_state):
     valid_actions = []
     for idx, step in enumerate(STEP):
         new_position = position + step
+        # print(new_position)
         if valid_action(new_position, game_state):
             valid_actions.append(ACTION_NAME[idx])
+    return valid_actions
