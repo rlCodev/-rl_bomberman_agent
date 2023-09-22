@@ -97,7 +97,8 @@ def act(self, game_state: dict) -> str:
         # 80%: walk in any direction. 10% wait. 10% bomb.
         # return np.random.choice(ACTIONS, p=[.2, .2, .2, .2, .1, .1])
         rule_based_action = rule_based_agent.act(self, game_state)
-        if rule_based_action is not None: #and random.random() < self.eps_threshold:
+        rule_based_choice = np.random.choice([1,2])
+        if rule_based_action is not None and rule_based_choice == 1: #and random.random() < self.eps_threshold:
             action_chosen = rule_based_action
         else:
             action_chosen = np.random.choice(ACTIONS, p=[.2, .2, .2, .2, .1, .1]) 
@@ -105,7 +106,7 @@ def act(self, game_state: dict) -> str:
         with torch.no_grad():
             state = torch.tensor(state_to_features(self, game_state), dtype=torch.float32).unsqueeze(0)  # Add batch dimension
             prediction = self.policy_net(state).max(1)[1].view(1, 1).item()
-            chosen_action = action_index_to_string(prediction)
+            action_chosen = action_index_to_string(prediction)
             
             # action_index = self.policy_net(state).argmax().item()
             # print(action_index)
@@ -114,17 +115,20 @@ def act(self, game_state: dict) -> str:
             # q_values = self.model(state)
             # action_index = torch.argmax(q_values).item()
             # chosen_action = ACTIONS[action_index]
-    self.logger.info(f'Predicted action: {chosen_action}')
-    if chosen_action != 'BOMB':
-        new_pos = helper.get_step(chosen_action) + game_state['self'][3]
+    self.logger.info(f'Predicted action: {action_chosen}')
+    if action_chosen != 'BOMB':
+        new_pos = helper.get_step(action_chosen) + game_state['self'][3]
         self.tiles_visited.add(tuple(new_pos))
 
      # If agent has been in the same location three times recently, it's a loop
     x, y = game_state['self'][3]
     self.coordinate_history.append((x, y))
     if self.coordinate_history.count((x, y)) > 4:
-        valid_actions = helper.get_valid_action_strings(game_state)
-        action_chosen = np.random.choice(valid_actions)
+        try:
+            valid_actions = helper.get_valid_action_strings(game_state)
+            action_chosen = np.random.choice(valid_actions)
+        except:
+            action_chosen = 'WAIT'
     return action_chosen
 
 
