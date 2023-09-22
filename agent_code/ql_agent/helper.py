@@ -35,11 +35,11 @@ def state_to_features_matrix(self, game_state, tiles_explored_set):
 
         else:
             move_feature_vector = [-1] * 6
-        # check for chained invalid actions 
+        # # check for chained invalid actions 
         # move_feature_vector.append(chain_inv_a(self, move_coords, game_state))
 
-        # check for backtracked moves
-        move_feature_vector.append(backtracked_move(self, move_coords, game_state))
+        # # check for backtracked moves
+        # move_feature_vector.append(backtracked_move(self, move_coords, game_state))
 
         feature_matrix.append(move_feature_vector)
     return np.array(feature_matrix)
@@ -367,6 +367,12 @@ def get_action_name(coord_change):
     matching_indices = np.where(np.all(STEP == coord_change, axis=1))[0]
     if matching_indices.size > 0:
         return ACTION_NAME[matching_indices[0]]
+    return None
+
+def get_step(step_name):
+    matching_indices = np.where(np.all(step_name == ACTION_NAME, axis=1))[0]
+    if matching_indices.size > 0:
+        return STEP[matching_indices[0]]
     return None
 
 def valid_action(position, game_state):

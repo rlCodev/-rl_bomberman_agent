@@ -84,7 +84,6 @@ def setup_training(self):
     self.loss_function = nn.MSELoss()
     self.losses = []
     # Track visited tiles for giving rewards for visiting many tiles
-    self.tiles_visited = []
     self.coins_collected = 0
     # Setup models
     input_size = 1445
@@ -255,9 +254,20 @@ def reward_from_events(self, events: List[str], old_game_state: dict, self_actio
         reward_sum -= (distance_to_coins_new - distance_to_coins_old) * coin_reward_factor
 
     # Reward / punish for moving towards / away from enemies
+    enemy_reward_factor = 5
+    distance_to_enemies_old = old_features[4][1]
+    distance_to_enemies_new = new_features[4][1]
 
+    if distance_to_enemies_new < distance_to_enemies_old:
+        reward_sum += (distance_to_enemies_old - distance_to_enemies_new) * enemy_reward_factor
+    else:
+        reward_sum -= (distance_to_enemies_new - distance_to_enemies_old) * enemy_reward_factor
 
     # Reward for exploring a new tile
+    if 'self' in new_game_state and len(new_game_state['self']) > 3:
+        if new_game_state['self'][3] not in self.tiles_visited:
+            self.tiles_visited.append(new_game_state['self'][3])
+            reward_sum += 10
 
     # Reward for moving away from danger
 
@@ -278,12 +288,6 @@ def reward_from_events(self, events: List[str], old_game_state: dict, self_actio
             reward_sum += game_rewards[event]
     # TODO: Check if agent in danger zone
     self.logger.info(f"Awarded {reward_sum} for events {', '.join(events)}")
-    
-    # Add reward for visiting new tiles
-    if 'self' in new_game_state and len(new_game_state['self']) > 3:
-        if new_game_state['self'][3] not in self.tiles_visited:
-            self.tiles_visited.append(new_game_state['self'][3])
-            reward_sum += 10
 
     return reward_sum
 

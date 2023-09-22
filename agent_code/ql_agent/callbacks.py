@@ -10,6 +10,7 @@ from .utils import action_index_to_string, action_string_to_index
 from ..rule_based_agent import callbacks as rule_based_agent
 
 ACTIONS = ['UP', 'RIGHT', 'DOWN', 'LEFT', 'WAIT', 'BOMB']
+STEP = np.array([(1,0), (-1,0), (0,1), (0,-1), (0,0)])
 
 # Create a custom Discrete action space
 action_space = Discrete(len(ACTIONS))
@@ -44,6 +45,8 @@ def setup(self):
     # For rule based inference learnign:
     self.bomb_buffer = 0
     self.current_round = 0
+
+    self.tiles_visited = []
 
     if not os.path.isfile("custom_mlp_policy_model.pth") and not self.train:
         # Size of feature representation below
@@ -102,6 +105,7 @@ def act(self, game_state: dict) -> str:
             action_chosen = np.random.choice(ACTIONS, p=[.2, .2, .2, .2, .1, .1]) 
     else:
         with torch.no_grad():
+            state_to_features_matrix(self, game_state, self.tiles_visited)
             state = torch.tensor(state_to_features(self, game_state), dtype=torch.float32).unsqueeze(0)  # Add batch dimension
             prediction = self.policy_net(state).max(1)[1].view(1, 1).item()
             chosen_action = action_index_to_string(prediction)
@@ -115,6 +119,8 @@ def act(self, game_state: dict) -> str:
             # chosen_action = ACTIONS[action_index]
             self.logger.info(f'Predicted action: {chosen_action}')
             action_chosen = chosen_action
+            if not self.train:
+                self.tiles_visited.append(state_to_features(self, game_state))
     return action_chosen
 
 
