@@ -86,8 +86,8 @@ def setup_training(self):
     # Track visited tiles for giving rewards for visiting many tiles
     self.coins_collected = 0
     # Setup models
-    input_size = 1445
-    hidden_size = 600
+    input_size = 30
+    hidden_size = 20
     output_size = len(ACTIONS)
     self.policy_net = MLP(input_size, hidden_size, output_size)
     self.target_net = MLP(input_size, hidden_size, output_size)
@@ -244,14 +244,20 @@ def reward_from_events(self, events: List[str], old_game_state: dict, self_actio
         reward_sum += game_rewards[e.INVALID_ACTION]
 
     # Reward / punish for moving towards / away from coins
-    coin_reward_factor = 10
-    distance_to_coins_old = old_features[4][0]
-    distance_to_coins_new = new_features[4][0]
-
-    if distance_to_coins_new < distance_to_coins_old:
-        reward_sum += (distance_to_coins_old - distance_to_coins_new) * coin_reward_factor
-    else:
-        reward_sum -= (distance_to_coins_new - distance_to_coins_old) * coin_reward_factor
+    if old_game_state['coins'] is not None:
+        coin_reward_factor = 10
+        distance_to_coins_old = old_features[4][0]
+        distance_to_coins_new = new_features[4][0]
+        coin_column = [row[0] for row in old_features[:4]]
+        if 0 in coin_column and e.COIN_COLLECTED in events:
+            reward_sum += 5 * coin_reward_factor
+        elif 0 in coin_column and e.COIN_COLLECTED not in events:
+            reward_sum -= 5 * coin_reward_factor
+        else:
+            if distance_to_coins_new < distance_to_coins_old:
+                reward_sum += (distance_to_coins_old - distance_to_coins_new) * coin_reward_factor
+            else:
+                reward_sum -= (distance_to_coins_new - distance_to_coins_old) * coin_reward_factor
 
     # Reward / punish for moving towards / away from enemies
     enemy_reward_factor = 5
@@ -266,16 +272,42 @@ def reward_from_events(self, events: List[str], old_game_state: dict, self_actio
     # Reward for exploring a new tile
     if 'self' in new_game_state and len(new_game_state['self']) > 3:
         if new_game_state['self'][3] not in self.tiles_visited:
-            self.tiles_visited.append(new_game_state['self'][3])
+            # self.tiles_visited.append(new_game_state['self'][3])
             reward_sum += 10
 
     # Reward for moving away from danger
+    old_danger = old_features[4][3]
+    new_danger = new_features[4][3]
+    if new_danger < old_danger:
+        reward_sum += (old_danger - new_danger)*10
+    else:
+        reward_sum -= (new_danger - old_danger)*10
 
     # Punish for choosing move resulting in certain death
+    old_certain_death = old_features[4][4]
+    new_certain_death = new_features[4][4]
+
+    if new_certain_death > old_certain_death:
+        reward_sum -= 100
+    else:
+        reward_sum += 100
+    
 
     # Reward for placing bomb when Bomb effectiveness is max
+    if(e.BOMB_DROPPED in events):
+        # Find out, if placing the bomb at the position we were standing in was the best option
+        max_bomb_effectiveness = old_features[0][6] 
+        index = 0
+        for row in old_features:
+            if row[6] >=  max_bomb_effectiveness:
+                max_bomb_effectiveness = row[6]
+                index = old_features.index(row)
+
+        if(index == 4):
+            reward_sum += 50
 
     # Punish for chaining invalid actions
+
 
     # Punish for backtracking
 

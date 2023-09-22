@@ -1,20 +1,17 @@
+from collections import deque
 import os
 import random
 
 from agent_code.ql_agent.helper import state_to_features_matrix
+import agent_code.ql_agent.helper as helper
 from .MLP import MLP
 import numpy as np
 import torch
-from gymnasium.spaces import Discrete
 from .utils import action_index_to_string, action_string_to_index
 from ..rule_based_agent import callbacks as rule_based_agent
 
 ACTIONS = ['UP', 'RIGHT', 'DOWN', 'LEFT', 'WAIT', 'BOMB']
 STEP = np.array([(1,0), (-1,0), (0,1), (0,-1), (0,0)])
-
-# Create a custom Discrete action space
-action_space = Discrete(len(ACTIONS))
-
 
 def setup(self):
     """
@@ -38,15 +35,16 @@ def setup(self):
     #     self.logger.info("Loading model from saved state.")
     #     with open("my-saved-model.pt", "rb") as file:
     #         self.model = pickle.load(file)
-    input_size = 1445
-    hidden_size = 600
+    input_size = 30
+    hidden_size = 20
     output_size = len(ACTIONS)
 
     # For rule based inference learnign:
     self.bomb_buffer = 0
     self.current_round = 0
 
-    self.tiles_visited = []
+    self.tiles_visited = set()
+    self.coordinate_history = deque([], 5)
 
     if not os.path.isfile("custom_mlp_policy_model.pth") and not self.train:
         # Size of feature representation below
@@ -105,7 +103,6 @@ def act(self, game_state: dict) -> str:
             action_chosen = np.random.choice(ACTIONS, p=[.2, .2, .2, .2, .1, .1]) 
     else:
         with torch.no_grad():
-            state_to_features_matrix(self, game_state, self.tiles_visited)
             state = torch.tensor(state_to_features(self, game_state), dtype=torch.float32).unsqueeze(0)  # Add batch dimension
             prediction = self.policy_net(state).max(1)[1].view(1, 1).item()
             chosen_action = action_index_to_string(prediction)
@@ -117,10 +114,17 @@ def act(self, game_state: dict) -> str:
             # q_values = self.model(state)
             # action_index = torch.argmax(q_values).item()
             # chosen_action = ACTIONS[action_index]
-            self.logger.info(f'Predicted action: {chosen_action}')
-            action_chosen = chosen_action
-            if not self.train:
-                self.tiles_visited.append(state_to_features(self, game_state))
+    self.logger.info(f'Predicted action: {chosen_action}')
+    if chosen_action != 'BOMB':
+        new_pos = helper.get_step(chosen_action) + game_state['self'][3]
+        self.tiles_visited.add(tuple(new_pos))
+
+     # If agent has been in the same location three times recently, it's a loop
+    x, y = game_state['self'][3]
+    self.coordinate_history.append((x, y))
+    if self.coordinate_history.count((x, y)) > 4:
+        valid_actions = helper.get_valid_action_strings(game_state)
+        action_chosen = np.random.choice(valid_actions)
     return action_chosen
 
 
@@ -144,6 +148,10 @@ def state_to_features(self, game_state: dict) -> np.array:
     """
     if game_state is None:
         return None
+    
+    feature = helper.state_to_features_matrix(self, game_state).ravel()
+
+    return feature
     
     # celltype, self_position, other_position, coin, danger
     gamestate_2d = [[[value,0,0,0,0] for value in row] for row in game_state['field']]

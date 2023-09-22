@@ -14,11 +14,11 @@
                 "random_agent",
                 "rule_based_agent",
                 "coin_collector_agent",
-                "--train",
-                "1",
-                "--no-gui",
-                "--n-rounds", 
-                "10"
+                // "--train",
+                // "1",
+                // "--no-gui",
+                // "--n-rounds", 
+                // "10"
             ],
             "justMyCode": true
         }
