@@ -58,8 +58,8 @@ def setup_training(self):
     # Track visited tiles for giving rewards for visiting many tiles
     self.coins_collected = 0
     # Setup models
-    self.policy_net = MLP(c.INPUT_SIZE, c.HIDDEN_SIZE, c.OUTPUT_SIZE)
-    self.target_net = MLP(c.INPUT_SIZE, c.HIDDEN_SIZE, c.OUTPUT_SIZE)
+    self.policy_net = MLP(c.INPUT_SIZE, c.HIDDEN_SIZE, c.HIDDEN_SIZE_2, c.HIDDEN_SIZE_3, c.OUTPUT_SIZE)
+    self.target_net = MLP(c.INPUT_SIZE, c.HIDDEN_SIZE, c.HIDDEN_SIZE_2, c.HIDDEN_SIZE_3, c.OUTPUT_SIZE)
     if os.path.isfile("custom_mlp_policy_model.pth"):
         self.policy_net.load_state_dict(torch.load('custom_mlp_policy_model.pth'))
         self.target_net.load_state_dict(torch.load('custom_mlp_target_model.pth'))
@@ -88,6 +88,10 @@ def setup_training(self):
     self.logger.info(f"Current epsilon threshold: {self.eps_threshold}")
     self.memory = ReplayMemory(c.TRANSITION_HISTORY_SIZE)
     self.t = 0
+
+    # Last bomb dropped timer for rewards
+    self.last_bomb_dropped_timer = None
+    self.action_history = deque([], 10)
 
 def game_events_occurred(self, old_game_state: dict, self_action: str, new_game_state: dict, events: List[str]):
     """
@@ -195,12 +199,12 @@ def reward_from_events(self, events: List[str], old_game_state: dict, self_actio
     certain behavior.
     """
     game_rewards = {
-        e.COIN_COLLECTED: 500,
+        e.COIN_COLLECTED: 100,
         e.CRATE_DESTROYED: 30,
-        e.INVALID_ACTION: -80,
+        e.INVALID_ACTION: 20,
         e.KILLED_OPPONENT: 100,
-        e.GOT_KILLED: -300,
-        e.KILLED_SELF: -300,
+        e.GOT_KILLED: -100,
+        e.KILLED_SELF: -100,
         e.BOMB_DROPPED: 5,
     }
 
@@ -208,6 +212,8 @@ def reward_from_events(self, events: List[str], old_game_state: dict, self_actio
 
     # Punish for choosing invalid actions
     if e.INVALID_ACTION in events:
+        reward_sum -= game_rewards[e.INVALID_ACTION]
+    else:
         reward_sum += game_rewards[e.INVALID_ACTION]
 
     old_features = helper.state_to_features_matrix(self, old_game_state)
@@ -248,14 +254,16 @@ def reward_from_events(self, events: List[str], old_game_state: dict, self_actio
             if new_game_state['self'][3] not in self.tiles_visited:
                 # self.tiles_visited.append(new_game_state['self'][3])
                 reward_sum += 10
+            else:
+                reward_sum -= 10
 
         # Reward for moving away from danger
         old_danger = old_features[4][3]
         new_danger = new_features[4][3]
         if new_danger < old_danger:
-            reward_sum += (old_danger - new_danger)*10
+            reward_sum += (old_danger - new_danger)*20
         else:
-            reward_sum -= (new_danger - old_danger)*10
+            reward_sum -= (new_danger - old_danger)*20
 
         # Punish for choosing move resulting in certain death
         old_certain_death = old_features[4][4]
@@ -266,6 +274,7 @@ def reward_from_events(self, events: List[str], old_game_state: dict, self_actio
         else:
             reward_sum += 100
         
+    
 
     # Reward for placing bomb when Bomb effectiveness is max
     # if(e.BOMB_DROPPED in events):
@@ -289,6 +298,31 @@ def reward_from_events(self, events: List[str], old_game_state: dict, self_actio
 
         if max_row_index == 4:
             reward_sum += 50
+        # safe bomb dropped for 4 time steps
+        if self.last_bomb_dropped_timer == None:
+            self.last_bomb_dropped_timer = 4
+        else:
+            if self.last_bomb_dropped_timer == 0:
+                if e.KILLED_SELF not in events:
+                    reward_sum += 300
+                self.last_bomb_dropped_timer = None
+            else:
+                self.last_bomb_dropped_timer -= 1
+    
+
+    # Punish for same actions in a row and reward diverse actions
+
+    action_history_len = len(self.action_history)
+    count_action = self.action_history.count(self_action)
+    proportion = count_action/action_history_len
+    diversity_reward = action_history_len/count_action
+    if proportion > 0.5:
+        reward_sum -= np.round(diversity_reward * 3)
+    else:
+        reward_sum += np.round(diversity_reward * 3)
+
+    # Bomb doged reward
+    
 
 
     # Punish for chaining invalid actions
@@ -300,8 +334,8 @@ def reward_from_events(self, events: List[str], old_game_state: dict, self_actio
     for event in events:
         if event == e.COIN_COLLECTED:
             self.coins_collected += 1
-        if event in game_rewards:
-            reward_sum += game_rewards[event]
+        # if event in game_rewards:
+        #     reward_sum += game_rewards[event]
     # TODO: Check if agent in danger zone
     self.logger.info(f"Awarded {reward_sum} for events {', '.join(events)}")
 
@@ -315,7 +349,7 @@ def update_model(self):
     self.target_net.load_state_dict(target_net_state_dict)
 
     # Based on https://pytorch.org/tutorials/intermediate/reinforcement_q_learning.html
-    self.optimizer = AdamW(self.policy_net.parameters(), lr=c.LEARNING_RATE, amsgrad=True)
+    self.optimizer = AdamW(self.policy_net.parameters(), lr=c.LEARNING_RATE, amsgrad=True, weight_decay=0.01)
     if len(self.memory) < c.BATCH_SIZE:
         return
     transitions =self.memory.sample(c.BATCH_SIZE)

@@ -3,13 +3,17 @@ import torch.nn as nn
 
 
 class MLP(nn.Module):
-    def __init__(self, input_size, hidden_size, output_size):
+    def __init__(self, input_size, hidden_size, hidden_size_2, hidden_size_3, output_size):
         super().__init__()
 
 
 
         self.layers = nn.Sequential(
             nn.Linear(input_size, hidden_size),
+            nn.ReLU(),
+            nn.Linear(hidden_size, hidden_size_2),
+            nn.ReLU(),
+             nn.Linear(hidden_size_2, hidden_size_3),
             nn.ReLU(),
             nn.Linear(hidden_size, output_size),
         )

@@ -43,10 +43,10 @@ def setup(self):
 
     if not os.path.isfile("custom_mlp_policy_model.pth") and not self.train:
         # Size of feature representation below
-        self.policy_net = MLP(c.INPUT_SIZE, c.HIDDEN_SIZE, c.OUTPUT_SIZE)
+        self.policy_net = MLP(c.INPUT_SIZE, c.HIDDEN_SIZE, c.HIDDEN_SIZE_2, c.HIDDEN_SIZE_3, c.OUTPUT_SIZE)
     elif os.path.isfile("custom_mlp_policy_model.pth") and not self.train:
         # Create an instance of the custom MLP model
-        self.policy_net = MLP(c.INPUT_SIZE, c.HIDDEN_SIZE, c.OUTPUT_SIZE)
+        self.policy_net = MLP(c.INPUT_SIZE, c.HIDDEN_SIZE, c.HIDDEN_SIZE_2, c.HIDDEN_SIZE_3, c.OUTPUT_SIZE)
 
         # Load the saved model state dictionary
         # self.policy_net = torch.load('custom_mlp_policy_model.pth')
@@ -129,6 +129,9 @@ def act(self, game_state: dict) -> str:
     if action_chosen != 'BOMB':
         new_pos = tuple(helper.get_step(action_chosen) + game_state['self'][3])
         self.tiles_visited.add(new_pos)
+
+    if self.train:    
+        self.action_history.append(action_chosen)
         
     self.logger.info(f'Took action: {action_chosen}')
     
