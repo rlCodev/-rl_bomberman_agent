@@ -8,7 +8,7 @@ ACTION_NAME = ['RIGHT', 'LEFT', 'DOWN', 'UP', 'WAIT']
 def state_to_features_matrix(self, game_state):
     position = game_state['self'][3]
     feature_matrix = []
-    danger_map, extended_explosion_map = get_danger_map(game_state['field'], game_state['bombs'])
+    danger_map, extended_explosion_map = get_danger_map(game_state['field'], game_state['bombs'], game_state['explosion_map'])
     for step in STEP:
         move_coords = position + step
         if(valid_action(move_coords, game_state)):
@@ -270,7 +270,8 @@ def get_extended_explosion_map(game_state):
                 else:
                     break  # No need to continue updating if countdown is not greater
     return extended_explosion_map
-def get_danger_map(field, bombs):
+
+def get_danger_map(field, bombs, explosion_map):
     danger_map = np.zeros_like(field)
     extended_explosion_map = np.full_like(field, 10)
     max_danger = s.BOMB_POWER + 1
@@ -288,6 +289,10 @@ def get_danger_map(field, bombs):
                     danger_map[beam[0], beam[1]] = max_danger - length
                 if extended_explosion_map[beam[0], beam[1]] > countdown:
                     extended_explosion_map[beam[0], beam[1]] = countdown
+    for (x,y) in np.argwhere(explosion_map > 0):
+        danger_map[x,y] = max_danger
+        extended_explosion_map[x,y] = explosion_map[x,y]
+
     return danger_map, extended_explosion_map
 
 def get_danger(danger_map, position):

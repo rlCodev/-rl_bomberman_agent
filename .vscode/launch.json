@@ -14,11 +14,11 @@
                 "random_agent",
                 "peaceful_agent",
                 "rule_based_agent",
-                "--train",
-                "1",
-                "--no-gui",
-                "--n-rounds",
-                "5000"
+                //"--train",
+                //"1",
+                //"--no-gui",
+                //"--n-rounds",
+                //"5000"
             ],
             "justMyCode": true
         }

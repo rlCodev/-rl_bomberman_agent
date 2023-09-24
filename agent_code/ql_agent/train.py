@@ -180,7 +180,7 @@ def reward_from_events(self, events: List[str], old_game_state: dict, new_game_s
     game_rewards = {
         e.COIN_COLLECTED: 1,
         e.CRATE_DESTROYED: 1,
-        e.INVALID_ACTION: -1,
+        e.INVALID_ACTION: -2,
         e.KILLED_OPPONENT: 1,
         e.GOT_KILLED: -4,
         e.KILLED_SELF: -4,
@@ -207,6 +207,10 @@ def reward_from_events(self, events: List[str], old_game_state: dict, new_game_s
         for event in events:
             # Check if we are even allowed to place a bomb:
             bomb_droppable = old_features[4][5]
+
+            # Punish for not dropping bomb, when possible:
+            if bomb_droppable != -1 and e.BOMB_DROPPED not in events:
+                reward_sum -= 1
 
             # Tile, where bomb effectiveness is max
             max_bomb_effect_index = np.argmax(old_features[:, 5])

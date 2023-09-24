@@ -56,10 +56,11 @@ def act(self, game_state: dict) -> str:
     :return: The action to take as a string.
     """
 
+
     if self.train and random.random() < self.eps_threshold:
+        p = 0.8
         rule_based_action = rule_based_agent.act(self, game_state)
-        rule_based_choice = np.random.choice([1,1,1,1,1,2])
-        if rule_based_action is not None and rule_based_choice == 1:
+        if rule_based_action is not None and np.random.rand() < p:
             self.logger.debug("Random action from rule based Agent.")
             action_chosen = rule_based_action
         else:
