@@ -1,0 +1,62 @@
+import numpy as np
+import torch.nn as nn
+import events as e
+
+# Hyperparameters
+ACTIVATION_FUNCTION = nn.ELU  # Use PyTorch's ELU activation
+LOSS_FUNCTION = nn.SmoothL1Loss()  # Use Huber loss in PyTorch
+LEARNING_RATE = 0.01
+
+
+CURRENT_MODEL = 'dqn_hyper'
+
+# Architecture
+DENSE_LAYER_DIMS = 128
+# Input of 17x17 flattened board
+STATE_SHAPE = 289
+
+# Prioritized Experience Buffer
+ALPHA = 0.65
+BETA = 0.4
+TD_EPSILON = 0.01
+BETA_INCREMENT = 0.00001
+
+EXPERIENCE_BUFFER_SIZE_MIN = 8_192
+# EXPERIENCE_BUFFER_SIZE_MIN = 100
+EXPERIENCE_BUFFER_SIZE_MAX = 32_768
+BATCH_SIZE = 64
+
+TRAINING_ROUNDS = 30000
+
+GAMMA = 0.95
+EPSILON_START = 1
+EPSILON_END = 0.16
+EPSILON_DECAY = 0.99999
+
+UPDATE_TARGET_MODEL_EVERY = 5
+# UPDATE_TARGET_MODEL_EVERY = 1
+UPDATE_EVERY = 5
+SAVE_MODEL_EVERY = 100
+
+# Rewards
+REWARDS = {
+    e.MOVED_LEFT: 0,
+    e.MOVED_RIGHT: 0,
+    e.MOVED_UP: 0,
+    e.MOVED_DOWN: 0,
+    e.WAITED: -0.2,
+    e.INVALID_ACTION: -1,
+    e.BOMB_DROPPED: 0.4,  
+    e.BOMB_EXPLODED: 0,
+    e.CRATE_DESTROYED: 0.7,
+    e.COIN_FOUND: 0,
+    e.COIN_COLLECTED: 0.2,
+    e.KILLED_OPPONENT: 1,
+    e.KILLED_SELF: -1,
+    e.GOT_KILLED: -1,
+    e.OPPONENT_ELIMINATED: 1,
+    e.SURVIVED_ROUND: 0,
+}
+
+ACTIONS = ['DOWN', 'UP', 'RIGHT', 'LEFT', 'WAIT', 'BOMB']
+STEP = np.array([(1,0), (-1,0), (0,1), (0,-1), (0,0)])

@@ -10,7 +10,7 @@
             "args": [
                 "play",
                 "--agents",
-                "ql_agent",
+                "dqn_hyper_agent",
                 "random_agent",
                 "rule_based_agent",
                 "coin_collector_agent",
@@ -18,7 +18,7 @@
                 "1",
                 "--no-gui",
                 "--n-rounds", 
-                "10"
+                "10000"
             ],
             "justMyCode": true
         }
