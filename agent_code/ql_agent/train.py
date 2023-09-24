@@ -16,6 +16,7 @@ from .utils import action_index_to_string, action_string_to_index
 import agent_code.ql_agent.helper as helper
 import agent_code.ql_agent.hyperparameter as c
 
+
 class ReplayMemory(object):
 
     def __init__(self, capacity):
@@ -38,9 +39,11 @@ class ReplayMemory(object):
     def __len__(self):
         return len(self.memory)
 
+
 # This is only an example!
 Transition = namedtuple('Transition',
                         ('state', 'action', 'next_state', 'reward'))
+
 
 def setup_training(self):
     """
@@ -58,8 +61,9 @@ def setup_training(self):
     # Track visited tiles for giving rewards for visiting many tiles
     self.coins_collected = 0
     # Setup models
-    self.policy_net = MLP(c.INPUT_SIZE, c.HIDDEN_SIZE, c.OUTPUT_SIZE)
-    self.target_net = MLP(c.INPUT_SIZE, c.HIDDEN_SIZE, c.OUTPUT_SIZE)
+    device = torch.device("cpu")
+    self.policy_net = MLP(c.INPUT_SIZE, c.HIDDEN_SIZE, c.OUTPUT_SIZE).to(device)
+    self.target_net = MLP(c.INPUT_SIZE, c.HIDDEN_SIZE, c.OUTPUT_SIZE).to(device)
     if os.path.isfile("custom_mlp_policy_model.pth"):
         self.policy_net.load_state_dict(torch.load('custom_mlp_policy_model.pth'))
         self.target_net.load_state_dict(torch.load('custom_mlp_target_model.pth'))
@@ -68,7 +72,7 @@ def setup_training(self):
     self.steps_done = 0
     # self.eps_threshold = EPS_END + (EPS_START - EPS_END) * \
     #     math.exp(-1. * self.steps_done / EPS_DECAY_FACTOR)
-   
+
     # self.eps_threshold = STATIC_EPS
     # Load episodes from file
     self.episode_durations = []
@@ -132,8 +136,6 @@ def game_events_occurred(self, old_game_state: dict, self_action: str, new_game_
     # state_to_features is defined in callbacks.py
     # self.update_model(old_game_state, self_action, new_game_state, events)
 
-    
-
 
 def end_of_round(self, last_game_state: dict, last_action: str, events: List[str]):
     """
@@ -187,6 +189,9 @@ def end_of_round(self, last_game_state: dict, last_action: str, events: List[str
     self.eps_threshold = c.EPS_START * (1 - (len(self.episode_durations) / c.NUM_EPISODES))
 
 
+prev_features_matrix = None
+
+
 def reward_from_events(self, events: List[str], old_game_state: dict, self_action: str, new_game_state: dict) -> int:
     """
     *This is not a required function, but an idea to structure your code.*
@@ -212,9 +217,9 @@ def reward_from_events(self, events: List[str], old_game_state: dict, self_actio
 
     old_features = helper.state_to_features_matrix(self, old_game_state)
     if new_game_state is not None:
-        new_features = helper.state_to_features_matrix(self, new_game_state)
-
-    
+        global prev_features_matrix
+        new_features = helper.state_to_features_matrix(self, new_game_state, prev_features_matrix)
+        prev_features_matrix = new_features
 
         # Reward / punish for moving towards / away from coins
         if old_game_state['coins'] is not None:
@@ -253,9 +258,9 @@ def reward_from_events(self, events: List[str], old_game_state: dict, self_actio
         old_danger = old_features[4][3]
         new_danger = new_features[4][3]
         if new_danger < old_danger:
-            reward_sum += (old_danger - new_danger)*10
+            reward_sum += (old_danger - new_danger) * 10
         else:
-            reward_sum -= (new_danger - old_danger)*10
+            reward_sum -= (new_danger - old_danger) * 10
 
         # Punish for choosing move resulting in certain death
         old_certain_death = old_features[4][4]
@@ -265,7 +270,10 @@ def reward_from_events(self, events: List[str], old_game_state: dict, self_actio
             reward_sum -= 100
         else:
             reward_sum += 100
-        
+
+        # Punish for backtracking
+        if backtracking_happened(new_features):
+            reward_sum -= 5
 
     # Reward for placing bomb when Bomb effectiveness is max
     # if(e.BOMB_DROPPED in events):
@@ -281,20 +289,17 @@ def reward_from_events(self, events: List[str], old_game_state: dict, self_actio
     #     if(index == 4):
     #         reward_sum += 50
 
-
     if e.BOMB_DROPPED in events:
-    # Find the row with the maximum value in column 5
+        # Find the row with the maximum value in column 5
         max_row_index = np.argmax(old_features[:, 5])
         # max_bomb_effectiveness = old_features[max_row_index, 5]
 
         if max_row_index == 4:
             reward_sum += 50
 
-
     # Punish for chaining invalid actions
 
 
-    # Punish for backtracking
 
     # Reward for coins collected
     for event in events:
@@ -307,27 +312,39 @@ def reward_from_events(self, events: List[str], old_game_state: dict, self_actio
 
     return reward_sum
 
+
+def backtracking_happened(feature_matrix):
+    backtracking_vector = [direction[7] for direction in feature_matrix]
+    #print(backtracking_vector)
+    if backtracking_vector[0] == 1 and backtracking_vector[1] == 1:
+        return True
+    elif backtracking_vector[2] == 1 and backtracking_vector[3] == 1:
+        return True
+    else:
+        return False
+
+
 def update_model(self):
     target_net_state_dict = self.target_net.state_dict()
     policy_net_state_dict = self.policy_net.state_dict()
     for key in policy_net_state_dict:
-        target_net_state_dict[key] = policy_net_state_dict[key]*c.TAU + target_net_state_dict[key]*(1-c.TAU)
+        target_net_state_dict[key] = policy_net_state_dict[key] * c.TAU + target_net_state_dict[key] * (1 - c.TAU)
     self.target_net.load_state_dict(target_net_state_dict)
 
     # Based on https://pytorch.org/tutorials/intermediate/reinforcement_q_learning.html
     self.optimizer = AdamW(self.policy_net.parameters(), lr=c.LEARNING_RATE, amsgrad=True)
     if len(self.memory) < c.BATCH_SIZE:
         return
-    transitions =self.memory.sample(c.BATCH_SIZE)
+    transitions = self.memory.sample(c.BATCH_SIZE)
     batch = Transition(*zip(*transitions))
 
     # Compute a mask of non-final states and concatenate the batch elements
     # (a final state would've been the one after which simulation ended)
     non_final_mask = torch.tensor(tuple(map(lambda s: s is not None,
-                                          batch.next_state)), dtype=torch.bool)
+                                            batch.next_state)), dtype=torch.bool)
     non_final_next_states = torch.cat([s for s in batch.next_state
-                                                if s is not None])
-    
+                                       if s is not None])
+
     state_batch = torch.cat(batch.state)
     action_batch = torch.cat(batch.action)
     reward_batch = torch.cat(batch.reward)
@@ -391,6 +408,7 @@ def update_model(self):
     #     self.optimizer.step()
     # print(f"Avg loss: {sum(self.losses)/len(self.losses)}")
 
+
 def plot_durations(self, gamestate, show_result=False):
     fig = plt.figure(1)
     durations_t = torch.tensor(self.episode_durations, dtype=torch.float)
@@ -420,9 +438,11 @@ def plot_durations(self, gamestate, show_result=False):
 
     # Calculate and plot the moving average of coins collected
     moving_average_window = 100  # Adjust this window size as needed
-    moving_avg = np.convolve(coins_collected_t.numpy(), np.ones(moving_average_window)/moving_average_window, mode='valid')
-    ax2.plot(np.arange(len(moving_avg)) + moving_average_window - 1, moving_avg, linestyle='--', color='green', label='Coins Collected (Avg)')
-    
+    moving_avg = np.convolve(coins_collected_t.numpy(), np.ones(moving_average_window) / moving_average_window,
+                             mode='valid')
+    ax2.plot(np.arange(len(moving_avg)) + moving_average_window - 1, moving_avg, linestyle='--', color='green',
+             label='Coins Collected (Avg)')
+
     plt.pause(0.001)  # pause a bit so that plots are updated
     # Save plot to file
     plt.savefig('./plots/training_plot.png')

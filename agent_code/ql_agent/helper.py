@@ -39,7 +39,7 @@ def state_to_features_matrix(self, game_state, previous_feature_matrix=None):
         move_feature_vector.append(invalid_action(move_coords, game_state))
         # else:
         #     move_feature_vector = [-1] * 6
-        move_feature_vector.append(backtracking(step), previous_feature_matrix)
+        move_feature_vector.append(backtracking(step, previous_feature_matrix))
 
 
         # # check for chained invalid actions
@@ -151,21 +151,23 @@ def calculate_bomb_effectiveness(game_state, bomb_position):
     return effectiveness_score
 
 
-def backtracking(step, prev_feature_matrix):
+def backtracking(step, prev_feature_matrix=None):
     # Note: implement logic in rewards to punish LEFT_AND_Right==1 or Up_AND_Down==1
     backtracking_vector = []
 
     if prev_feature_matrix is not None:
-        backtracking_vector = [direction[8] for direction in prev_feature_matrix]
+        backtracking_vector = [direction[7] for direction in prev_feature_matrix]
 
     if backtracking_vector.count(1) == 2 or prev_feature_matrix is None:
         backtracking_vector = [0 for step in STEP]
 
+    current_step = -1
     for i, step_i in enumerate(STEP):
-        if step_i == step:
+        if np.equal(step_i, step).all():
+            current_step = i
             backtracking_vector[i] = 1 if backtracking_vector[i] != 1 else 0
 
-    return backtracking_vector
+    return backtracking_vector[current_step]
 
 
 def manhattan_distance(point1, point2):

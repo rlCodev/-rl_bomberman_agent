@@ -32,6 +32,6 @@ ACTIONS = ['UP', 'RIGHT', 'DOWN', 'LEFT', 'WAIT', 'BOMB']
 STEP = np.array([(1,0), (-1,0), (0,1), (0,-1), (0,0)])
 
 
-INPUT_SIZE = 35
+INPUT_SIZE = 40
 HIDDEN_SIZE = 20
 OUTPUT_SIZE = len(ACTIONS)
