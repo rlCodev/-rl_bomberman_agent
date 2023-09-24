@@ -10,8 +10,8 @@ from agent_code.dqn_hyper_agent.replay_memory import ReplayMemory, Transition
 from tensorboardX import SummaryWriter
 from datetime import datetime
 from typing import List, Tuple
-from agent_code.dqn_hyper_agent.features import state_to_features
 from agent_code.dqn_hyper_agent.utils import action_string_to_index
+from agent_code.dqn_hyper_agent.callbacks import state_to_features
 import events as e
 
 import numpy as np
@@ -32,6 +32,9 @@ def setup_training(self):
 
     self.episode_losses = []
     self.episode_loss = 0
+
+    with open('explosion_map.pt', 'rb') as file:
+        self.exploding_tiles_map = pickle.load(file)
 
     # Create a TensorboardX writer
     self.writer = SummaryWriter(log_dir='logs')
@@ -58,24 +61,33 @@ def setup_training(self):
     
     self.steps_done = 0
 
+    global exploding_tiles_map                              # dictionary where the keys are tuples. for every tuple the output is an  
+    with open('explosion_map.pt', 'rb') as file:            # array with coordinates that are dangerous if a bomb is placed on this tuple
+        exploding_tiles_map = pickle.load(file)
+
+
+
 def game_events_occurred(self, old_game_state: dict, self_action: str, new_game_state: dict, events: List[str]):
     if old_game_state is None or new_game_state is None or self_action is None:
         return
 
     action = ACTIONS.index(self_action)
-    reward = reward_from_events(events)
-    reward += get_movement_reward(old_game_state['self'][3], new_game_state['self'][3], old_game_state['field'],
-                                  old_game_state['bombs'], old_game_state['coins'], old_game_state['others'])
+    aux_events(self, old_game_state, self_action, new_game_state, events)
+    reward = reward_from_events(self, events)
+    # reward = get_movement_reward(old_game_state['self'][3], new_game_state['self'][3], old_game_state['field'],
+    #                               old_game_state['bombs'], old_game_state['coins'], old_game_state['others'])
     # td_error = get_td_error(self, old_game_state, action, reward, new_game_state)
     # ex_feartur = state_to_features(old_game_state)
+    
     reward = torch.tensor([reward])
-    action = torch.tensor([[action_string_to_index(self_action)]], dtype=torch.long)
-    state = state_to_features(old_game_state)
+    action = torch.tensor([[action_string_to_index(self_action)]], dtype=torch.int64)
     self.memory.push(state_to_features(old_game_state), action, state_to_features(new_game_state), reward)
 
-    update_q_values(self)
+    update_model(self)
+
     self.epsilon = self.epsilon * EPSILON_DECAY if self.epsilon > EPSILON_END else EPSILON_END
-    self.episode_reward += reward
+    self.episode_reward += float(reward)
+   
 
     self.episodes_round += 1
     if e.COIN_COLLECTED in events:
@@ -83,6 +95,23 @@ def game_events_occurred(self, old_game_state: dict, self_action: str, new_game_
 
 
 def end_of_round(self, last_game_state: dict, last_action: str, events: List[str]):
+    
+    action = ACTIONS.index(last_action)
+    # reward = reward_from_events(events)
+    reward = reward_from_events(self, events)
+
+    # td_error = get_td_error(self, old_game_state, action, reward, last_game_state)
+    # ex_feartur = state_to_features(old_game_state)
+    reward = torch.tensor([reward])
+    action = torch.tensor([[action_string_to_index(last_action)]], dtype=torch.int64)
+    state = state_to_features(last_game_state)
+    self.memory.push(state, action, None, reward)
+
+    update_model(self)
+
+
+
+
     self.episode_rewards.append(self.episode_reward)
     self.episode_reward = 0
 
@@ -127,19 +156,19 @@ def end_of_round(self, last_game_state: dict, last_action: str, events: List[str
     self.coins_collected = 0
     # Only plot every 20 episodes
     # if len(self.episode_durations) % 100 == 0:
-    plot_durations(self, last_game_state)
+    # plot_durations(self, last_game_state)
     # Save current training episodes to file
-    with open('training_episodes.pkl', 'wb') as f:
-        pickle.dump(self.episode_durations, f)
-    with open('training_coins_collected.pkl', 'wb') as f:
-        pickle.dump(self.episodes_coins_collected, f)
+    # with open('training_episodes.pkl', 'wb') as f:
+    #     pickle.dump(self.episode_durations, f)
+    # with open('training_coins_collected.pkl', 'wb') as f:
+    #     pickle.dump(self.episodes_coins_collected, f)
 
 
-def reward_from_events(occurred_events: List[str]) -> int:
-    reward_sum = 0
-    for event in occurred_events:
-        reward_sum += REWARDS[event]
-    return reward_sum
+# def reward_from_events(occurred_events: List[str]) -> int:
+#     reward_sum = 0
+#     for event in occurred_events:
+#         reward_sum += REWARDS[event]
+#     return reward_sum
 
 
 def get_td_error(self, old_game_state: dict, action: int, reward: float, new_game_state: dict) -> float:
@@ -205,6 +234,55 @@ def get_movement_reward(old_pos: Tuple[int, int], new_pos: Tuple[int, int], fiel
 
     return movement_reward
 
+
+def update_model(self):
+
+    # Based on https://pytorch.org/tutorials/intermediate/reinforcement_q_learning.html
+    self.optimizer = AdamW(self.policy_net.parameters(), lr=LEARNING_RATE, amsgrad=True, weight_decay=0.01)
+    if len(self.memory) < BATCH_SIZE:
+        return
+    transitions =self.memory.sample(BATCH_SIZE)
+    batch = Transition(*zip(*transitions))
+
+    # Compute a mask of non-final states and concatenate the batch elements
+    # (a final state would've been the one after which simulation ended)
+    non_final_mask = torch.tensor(tuple(map(lambda s: s is not None,
+                                          batch.next_state)), dtype=torch.bool)
+    non_final_next_states = torch.cat([s for s in batch.next_state
+                                                if s is not None])
+    
+    state_batch = torch.cat(batch.state)
+    action_batch = torch.cat(batch.action)
+    reward_batch = torch.cat(batch.reward)
+
+    # Compute Q(s_t, a) - the model computes Q(s_t), then we select the
+    # columns of actions taken. These are the actions which would've been taken
+    state_action_values = self.policy_net(state_batch)
+    state_action_values = state_action_values.gather(1, action_batch)
+
+    # Compute V(s_{t+1}) for all next states.
+    # Expected values of actions for non_final_next_states are computed based
+    # on the "older" target_net; selecting their best reward with max(1)[0].
+    # This is merged based on the mask, such that we'll have either the expected
+    # state value or 0 in case the state was final.
+    next_state_values = torch.zeros(BATCH_SIZE)
+    with torch.no_grad():
+        next_state_values[non_final_mask] = self.target_net(non_final_next_states).max(1)[0]
+    # Compute the expected Q values
+    expected_state_action_values = (next_state_values * GAMMA) + reward_batch
+
+    # Compute Huber loss
+    criterion = nn.SmoothL1Loss()
+    loss = criterion(state_action_values, expected_state_action_values.unsqueeze(1))
+    self.episode_loss += loss
+    self.logger.debug(f'Loss: {loss}')
+    # print(f"Episode {len(self.episode_durations)} Loss: {loss.detach().numpy().item()}")
+    # Optimize the model
+    self.optimizer.zero_grad()
+    loss.backward()
+    # In-place gradient clipping
+    torch.nn.utils.clip_grad_value_(self.policy_net.parameters(), 100)
+    self.optimizer.step()
 
 def update_q_values(self):
     self.optimizer = AdamW(self.policy_net.parameters(), lr=LEARNING_RATE, amsgrad=True)
@@ -295,3 +373,131 @@ def plot_durations(self, gamestate, show_result=False):
     plt.pause(0.001)  # pause a bit so that plots are updated
     # Save plot to file
     plt.savefig('./plots/training_plot.png')
+
+
+
+
+def reward_from_events(self, events: List[str]) -> int:
+    '''
+        Input: self, list of events
+        Output: sum of rewards resulting from the events
+    '''
+    game_rewards = {
+        e.COIN_COLLECTED: 8,
+        e.KILLED_OPPONENT: 20,
+        e.KILLED_SELF: -80,
+        e.WAITED: -1,
+        e.INVALID_ACTION: -4,
+        e.MOVED_DOWN: -1,
+        e.MOVED_LEFT: -1,
+        e.MOVED_RIGHT: -1,
+        e.MOVED_UP: -1,
+        "COIN_CHASER": 3,             
+        "MOVED_OUT_OF_DANGER": 5,
+        "STAYED_NEAR_BOMB": -5,
+        "MOVED_INTO_DANGER": -5,
+        "CRATE_CHASER": 1.5,
+        "BOMB_NEXT_TO_CRATE": 2,
+        "BOMB_NOT_NEXT_TO_CRATE": -2,
+        "DROPPED_BOMB_NEAR_ENEMY": 1,
+        "DROPPED_BOMB_NEXT_TO_ENEMY": 8, 
+        "OPPONENT_CHASER": 2
+    }
+
+    reward_sum = 0
+    for event in events:
+        if event in game_rewards:
+            reward_sum += game_rewards[event]
+    self.logger.info(f"Awarded {reward_sum} for events {', '.join(events)}")
+    return reward_sum
+
+
+
+def aux_events(self, old_game_state, self_action, new_game_state, events):
+    '''Defining auxillary events for auxillary rewards to optimize training'''
+    
+    # get positions of the player in old state and new state (tuples (x,y) in this case)
+    old_player_coor = old_game_state['self'][3]     
+    new_player_coor = new_game_state['self'][3]
+        
+ 
+    #define event coin_chaser
+    coin_coordinates = old_game_state['coins']      #get coin coordinates(also tuples in form (x,y))
+    if len(coin_coordinates) != 0:                  #now calculate distance to all coins in respect to...
+        old_coin_distances = np.linalg.norm(np.subtract(coin_coordinates,old_player_coor), axis=1) #...old player position
+        new_coin_distances = np.linalg.norm(np.subtract(coin_coordinates,new_player_coor), axis=1) #...new player position
+
+        if min(new_coin_distances) < min(old_coin_distances):   #if the distance to closest coin got smaller
+            events.append("COIN_CHASER")                          # -> reward
+
+    
+    #define events with bombs
+    old_bomb_coors = old_game_state['bombs']                #get bomb coordinates (careful: timer still included: ((x,y),t)) for each bomb)
+
+    dangerous_tiles = []                                    #this array will store all tuples with 'dangerous' tile coordinates
+    for bomb in old_bomb_coors:
+        for coor in self.exploding_tiles_map[bomb[0]]:      #for each bomb get all tiles that explode with that bomb...
+            dangerous_tiles.append(coor)                    ##... and append them to dangerous_tiles
+
+
+    if dangerous_tiles != []:
+
+        #event in case the agent sucsessfully moved away from a dangerous tile -> reward     
+        if old_player_coor in dangerous_tiles and new_player_coor not in dangerous_tiles:
+            events.append("MOVED_OUT_OF_DANGER")
+
+        #event in case agent stayed on a dangerous tile -> penalty
+        if old_player_coor in dangerous_tiles and ("WAITED" in events or "INVALID_ACTION" in events):
+            events.append("STAYED_NEAR_BOMB")
+        
+        #event in case agent moved onto a dangerous tile -> penalty
+        if old_player_coor not in dangerous_tiles and new_player_coor in dangerous_tiles:
+            events.append("MOVED_INTO_DANGER")
+    
+    #define crate chaser: the agent gets rewarded if he moves closer to crates ONLY if he currently has a bomb
+    field = old_game_state['field']
+    rows,cols = np.where(field == 1)
+    crates_position = np.array([rows,cols]).T       #all crate coordinates in form [x,y] in one array
+    old_crate_distance = np.linalg.norm(crates_position-np.array([old_player_coor[0],old_player_coor[1]]),axis = 1)
+    new_crate_distance = np.linalg.norm(crates_position-np.array([new_player_coor[0],new_player_coor[1]]),axis = 1)
+
+    if old_crate_distance.size > 0:                 #if agent moved closer to the nearest crate and BOMB action is possible 
+        if min(new_crate_distance) < min(old_crate_distance) and old_game_state['self'][2]: 
+            events.append("CRATE_CHASER")
+        
+    #get opponents
+    enemys = []
+    for others_coor in old_game_state['others']:
+        enemys.append(others_coor[3])
+
+    if self_action == 'BOMB' and e.INVALID_ACTION not in events:    #if bomb is placed...  
+
+        #define event for bomb next to crate
+        for i in range(len(np.where(old_crate_distance==1)[0])):    # ... give reward for each crate neighbouring bomb position                   
+            events.append("BOMB_NEXT_TO_CRATE")        
+
+        #define event for bomb not next to crate           
+        if len(np.where(old_crate_distance==1)[0]) == 0 :           #bomb is not placed next to crate
+            events.append("BOMB_NOT_NEXT_TO_CRATE")                   # -> penalty
+            
+        
+        #define event for bomb near/next to opponent
+        if len(old_game_state['others']) !=0:
+
+            for others_coor in old_game_state['others']:
+
+                if np.linalg.norm(np.subtract(old_player_coor,others_coor[3])) <=3:     #bomb placed near enemy -> reward
+                    events.append("DROPPED_BOMB_NEAR_ENEMY")
+                
+                if np.linalg.norm(np.subtract(old_player_coor,others_coor[3])) == 1:    #bomb placed net to enemy -> reward
+                    events.append("DROPPED_BOMB_NEXT_TO_ENEMY")
+        
+
+    #define opponent chaser
+    if len(enemys) != 0:                                                            
+        distances_old = np.linalg.norm(np.subtract(old_player_coor,enemys),axis=1)
+        distances_new = np.linalg.norm(np.subtract(new_player_coor,enemys),axis=1)
+        if min(distances_new) < min(distances_old):                                 #if agent moved closer to the closest enemy -> rewards
+            events.append("OPPONENT_CHASER")
+
+

@@ -3,41 +3,40 @@ from collections import deque
 import settings as s
 
 STEP = np.array([(1,0), (-1,0), (0,1), (0,-1), (0,0)])
-ACTION_NAME = ['DOWN', 'UP', 'RIGHT', 'LEFT', 'WAIT']
+ACTION_NAME = ['RIGHT', 'LEFT', 'DOWN', 'UP', 'WAIT']
 
-def state_to_features_matrix(self, game_state):
+def state_to_features(self, game_state):
     position = game_state['self'][3]
     feature_matrix = []
-    danger_map, extended_explosion_map = get_danger_map(game_state['field'], game_state['bombs'])
+    danger_map, extended_explosion_map = get_danger_map(game_state['field'], game_state['bombs'], game_state['explosion_map'])
     for step in STEP:
         move_coords = position + step
-        # if(valid_action(move_coords, game_state)):
-        move_feature_vector = []
+        if(valid_action(move_coords, game_state)):
+            move_feature_vector = []
 
-        # get distance to nearest coin
-        move_feature_vector.append(distance_to_coin(move_coords, game_state))
+            # get distance to nearest coin
+            move_feature_vector.append(distance_to_coin(move_coords, game_state))
 
-        # get distance to nearest opponent
-        move_feature_vector.append(distance_to_opponent(move_coords, game_state))
+            # get distance to nearest opponent
+            move_feature_vector.append(distance_to_opponent(move_coords, game_state))
 
-        # get number of tiles explored
-        if(tuple(step) == (0,0)):
-            move_feature_vector.append(len(self.tiles_visited))
+            # get number of tiles explored
+            if(tuple(step) == (0,0)):
+                move_feature_vector.append(len(self.tiles_visited))
+            else:
+                move_feature_vector.append(tiles_explored(move_coords, game_state, self.tiles_visited))
+
+            # get danger
+            move_feature_vector.append(get_danger(danger_map, move_coords))
+
+            # get certain death
+            move_feature_vector.append(certain_death(game_state, move_coords, danger_map, extended_explosion_map))
+
+            # get bomb effect
+            move_feature_vector.append(bomb_effect(move_coords, game_state))
+
         else:
-            move_feature_vector.append(tiles_explored(move_coords, game_state, self.tiles_visited))
-
-        # get danger
-        move_feature_vector.append(get_danger(danger_map, move_coords))
-
-        # get certain death
-        move_feature_vector.append(certain_death(game_state, move_coords, danger_map, extended_explosion_map))
-
-        # get bomb effect
-        move_feature_vector.append(bomb_effect(move_coords, game_state))
-
-        move_feature_vector.append(invalid_action(move_coords, game_state))
-        # else:
-        #     move_feature_vector = [-1] * 6
+            move_feature_vector = [-1] * 6
         # # check for chained invalid actions 
         # move_feature_vector.append(chain_inv_a(self, move_coords, game_state))
 
@@ -95,16 +94,19 @@ def bomb_effect(position, game_state):
         :param pos: position of bomb (x,y)
         '''
         destroyed_crates = 0
-        for direction in STEP:
-            for radius in range(1, 4):
-                explosion = position + direction*radius
-                # Clip the positions to stay within the field
-                explosion = np.clip(explosion, 0, np.array(game_state['field'].shape) - 1)
-                tile = game_state['field'][explosion[0], explosion[1]]
-                if tile == -1:
-                    break
-                if (tile == 1): # we will ge the crate destroyed
-                    destroyed_crates += 1
+        if(game_state['self'][2] == True):
+            for direction in STEP:
+                for radius in range(1, 4):
+                    explosion = position + direction*radius
+                    # Clip the positions to stay within the field
+                    explosion = np.clip(explosion, 0, np.array(game_state['field'].shape) - 1)
+                    tile = game_state['field'][explosion[0], explosion[1]]
+                    if tile == -1:
+                        break
+                    if (tile == 1): # we will ge the crate destroyed
+                        destroyed_crates += 1
+        else:
+            destroyed_crates = -1
         return destroyed_crates
 
 def calculate_bomb_effectiveness(game_state, bomb_position):
@@ -268,7 +270,8 @@ def get_extended_explosion_map(game_state):
                 else:
                     break  # No need to continue updating if countdown is not greater
     return extended_explosion_map
-def get_danger_map(field, bombs):
+
+def get_danger_map(field, bombs, explosion_map):
     danger_map = np.zeros_like(field)
     extended_explosion_map = np.full_like(field, 10)
     max_danger = s.BOMB_POWER + 1
@@ -286,6 +289,10 @@ def get_danger_map(field, bombs):
                     danger_map[beam[0], beam[1]] = max_danger - length
                 if extended_explosion_map[beam[0], beam[1]] > countdown:
                     extended_explosion_map[beam[0], beam[1]] = countdown
+    for (x,y) in np.argwhere(explosion_map > 0):
+        danger_map[x,y] = max_danger
+        extended_explosion_map[x,y] = explosion_map[x,y]
+
     return danger_map, extended_explosion_map
 
 def get_danger(danger_map, position):
@@ -393,5 +400,6 @@ def get_valid_action_strings(game_state):
         new_position = position + step
         # print(new_position)
         if valid_action(new_position, game_state):
-            valid_actions.append(ACTION_NAME[idx])
+            if(ACTION_NAME[idx] != 'WAIT'):
+                valid_actions.append(ACTION_NAME[idx])
     return valid_actions
