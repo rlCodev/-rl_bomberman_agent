@@ -25,7 +25,7 @@ LEARNING_RATE = 0.0001
 ACTIONS = ['UP', 'RIGHT', 'DOWN', 'LEFT', 'WAIT', 'BOMB']
 
 #Number Episodes has to match the number of episodes set in the json
-NUMBER_EPISODE = 5000
+NUMBER_EPISODE = 1000
 INPUT_SIZE = 30
 HIDDEN_LAYER_1_SIZE = 20
 HIDDEN_LAYER_2_SIZE = 12
@@ -44,7 +44,7 @@ def setup_training(self):
     self.coins_collected = 0
 
     # Setup models
-    self.model = MLP(INPUT_SIZE, HIDDEN_LAYER_1_SIZE, HIDDEN_LAYER_1_SIZE, OUTPUT_SIZE)
+    self.model = MLP(INPUT_SIZE, HIDDEN_LAYER_1_SIZE, HIDDEN_LAYER_2_SIZE, OUTPUT_SIZE)
     self.optimizer = AdamW(self.model.parameters(), lr=LEARNING_RATE, amsgrad=True)
 
     if os.path.isfile("custom_mlp_policy_model.pth"):

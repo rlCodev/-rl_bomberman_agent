@@ -38,11 +38,11 @@ def setup(self):
 
     if not os.path.isfile("custom_mlp_policy_model.pth") and not self.train:
         # Size of feature representation below
-        self.model = MLP(INPUT_SIZE, HIDDEN_LAYER_1_SIZE, HIDDEN_LAYER_1_SIZE, 6)
+        self.model = MLP(INPUT_SIZE, HIDDEN_LAYER_1_SIZE, HIDDEN_LAYER_2_SIZE, 6)
     elif os.path.isfile("custom_mlp_policy_model.pth") and not self.train:
         self.logger.info("Loading MLP from saved state.")
         # Create an instance of the custom MLP model
-        self.model = MLP(INPUT_SIZE, HIDDEN_LAYER_1_SIZE, HIDDEN_LAYER_1_SIZE, 6)
+        self.model = MLP(INPUT_SIZE, HIDDEN_LAYER_1_SIZE, HIDDEN_LAYER_2_SIZE, 6)
         # Load the saved model state dictionary
         self.model.load_state_dict(torch.load('custom_mlp_policy_model.pth'))
 
