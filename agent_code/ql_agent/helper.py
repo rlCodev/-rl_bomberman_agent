@@ -12,35 +12,37 @@ def state_to_features_matrix(self, game_state, previous_feature_matrix=None):
     danger_map, extended_explosion_map = get_danger_map(game_state['field'], game_state['bombs'])
     for step in STEP:
         move_coords = position + step
-        if(valid_action(move_coords, game_state)):
-            move_feature_vector = []
+        # if(valid_action(move_coords, game_state)):
+        move_feature_vector = []
 
-            # get distance to nearest coin
-            move_feature_vector.append(distance_to_coin(move_coords, game_state))
+        # get distance to nearest coin
+        move_feature_vector.append(distance_to_coin(move_coords, game_state))
 
-            # get distance to nearest opponent
-            move_feature_vector.append(distance_to_opponent(move_coords, game_state))
+        # get distance to nearest opponent
+        move_feature_vector.append(distance_to_opponent(move_coords, game_state))
 
-            # get number of tiles explored
-            if(tuple(step) == (0,0)):
-                move_feature_vector.append(len(self.tiles_visited))
-            else:
-                move_feature_vector.append(tiles_explored(move_coords, game_state, self.tiles_visited))
-
-            # get danger
-            move_feature_vector.append(get_danger(danger_map, move_coords))
-
-            # get certain death
-            move_feature_vector.append(certain_death(game_state, move_coords, danger_map, extended_explosion_map))
-
-            # get bomb effect
-            move_feature_vector.append(bomb_effect(move_coords, game_state))
-
-            move_feature_vector.append(backtracking(step), previous_feature_matrix)
-
+        # get number of tiles explored
+        if(tuple(step) == (0,0)):
+            move_feature_vector.append(len(self.tiles_visited))
         else:
-            move_feature_vector = [-1] * 6
-        # # check for chained invalid actions 
+            move_feature_vector.append(tiles_explored(move_coords, game_state, self.tiles_visited))
+
+        # get danger
+        move_feature_vector.append(get_danger(danger_map, move_coords))
+
+        # get certain death
+        move_feature_vector.append(certain_death(game_state, move_coords, danger_map, extended_explosion_map))
+
+        # get bomb effect
+        move_feature_vector.append(bomb_effect(move_coords, game_state))
+
+        move_feature_vector.append(invalid_action(move_coords, game_state))
+        # else:
+        #     move_feature_vector = [-1] * 6
+        move_feature_vector.append(backtracking(step), previous_feature_matrix)
+
+
+        # # check for chained invalid actions
         # move_feature_vector.append(chain_inv_a(self, move_coords, game_state))
 
         # # check for backtracked moves
