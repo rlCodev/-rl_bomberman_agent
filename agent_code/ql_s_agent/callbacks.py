@@ -63,7 +63,7 @@ def act(self, game_state: dict) -> str:
 
 
     if self.train and random.random() < self.eps_threshold:
-        p = 0.0
+        p = 0.8
         rule_based_action = rule_based_agent.act(self, game_state)
         if rule_based_action is not None and np.random.rand() < p:
             self.logger.debug("Random action from rule based Agent.")
@@ -154,11 +154,13 @@ def state_to_features(game_state: dict) -> np.array:
 
         steps_to_coins = np.zeros(4)
         for j, neighbor in enumerate(neighbor_pos):                             #get the number of steps from every neighbor to closest coin
+            # TODO: Rework distance from player to coin
             steps_to_coins[j] = search_for_obj(player, neighbor ,coin_field)   
         
         if max(steps_to_coins) != 0:                                            #return for each neighbor: #steps to coin / #minimal steps to coin
             steps_to_coins = steps_to_coins * 1/max(steps_to_coins)                  
 
+    # TODO: Feature vector: [Wall, Coin, Crate, Danger, escape_danger, distance to coin, distance to crate, distance to enemy]
     #each direction is encoded by [Wall, Crate, Coin_prio, Opponent_prio, Crate_prio, free_tile, Danger]
     for i in range(np.shape(neighbor_pos)[0]):
         
@@ -174,6 +176,7 @@ def state_to_features(game_state: dict) -> np.array:
         if position_coins.size > 0:
             channels[i,2] = steps_to_coins[i]                                   #for each neighbor note number of steps to closest coin
 
+    # TODO!
     #describing pritority for next free tile if a bomb has been placed
     if player_on_bomb:                                                          #parameter set in get_neighbor_danger
         tile_count = find_closest_free_tile(game_state, player, close_bomb_indices, bomb_position,neighbor_pos)         
@@ -196,6 +199,7 @@ def state_to_features(game_state: dict) -> np.array:
     #combining current channels:
     stacked_channels = np.stack(channels).reshape(-1)
     
+    # TODO: Maybe add backtracking?
     #our agent needs to now whether bomb action is possible
     own_bomb = []
     if game_state['self'][2]:

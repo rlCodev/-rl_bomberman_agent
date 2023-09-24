@@ -220,6 +220,8 @@ def reward_from_events(self, events: List[str]) -> int:
         Input: self, list of events
         Output: sum of rewards resulting from the events
     '''
+    # TODO: Divide rewards by 10
+    # TODO: Split rewards into game rewards and move rewards. If event in moves, then += -1
     game_rewards = {
         e.COIN_COLLECTED: 8,
         e.KILLED_OPPONENT: 20,
@@ -250,7 +252,9 @@ def reward_from_events(self, events: List[str]) -> int:
     return reward_sum
 
 
-
+# TODO: Change this to get_custom_rewards()
+# Return int, sum of custom rewards
+# Each custom reward is seperate method. Sum up custom rewards and return value
 def aux_events(self, old_game_state, self_action, new_game_state, events):
     '''Defining auxillary events for auxillary rewards to optimize training'''
     
