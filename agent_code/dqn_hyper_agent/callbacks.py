@@ -74,10 +74,12 @@ def setup(self):
     np.random.seed()
     # Fixed length FIFO queues to avoid repeating the same actions
     self.bomb_history = deque([], 5)
-    self.coordinate_history = deque([], 20)
+    self.coor_hist = deque([], 20)
     # While this timer is positive, agent will not hunt/attack opponents
     self.ignore_others_timer = 0
     self.current_round = 0
+
+
     if self.train:
         self.logger.info("Setting up model from scratch...")
 
@@ -129,18 +131,18 @@ def act(self, game_state):
                 bomb_map[i, j] = min(bomb_map[i, j], t)
 
     # If agent has been in the same location three times recently, it's a loop
-    if self.coordinate_history.count((x, y)) > 2:
+    if self.coor_hist.count((x, y)) > 2:
         self.ignore_others_timer = 5
     else:
         self.ignore_others_timer -= 1
-    self.coordinate_history.append((x, y))
+    self.coor_hist.append((x, y))
 
     # Check which moves make sense at all
     directions = [(x, y), (x + 1, y), (x - 1, y), (x, y + 1), (x, y - 1)]
     valid_tiles, valid_actions = [], []
     for d in directions:
         if ((arena[d] == 0) and
-                (game_state['explosion_map'][d] <= 1) and
+                (game_state['explosion_map'][d] < 1) and
                 (bomb_map[d] > 0) and
                 (not d in others) and
                 (not d in bomb_xys)):
@@ -160,9 +162,11 @@ def act(self, game_state):
     shuffle(action_ideas)
 
     # Compile a list of 'targets' the agent should head towards
-    dead_ends = [(x, y) for x in range(1, COLS) for y in range(1, ROWS) if (arena[x, y] == 0)
+    cols = range(1, arena.shape[0] - 1)
+    rows = range(1, arena.shape[0] - 1)
+    dead_ends = [(x, y) for x in cols for y in rows if (arena[x, y] == 0)
                  and ([arena[x + 1, y], arena[x - 1, y], arena[x, y + 1], arena[x, y - 1]].count(0) == 1)]
-    crates = [(x, y) for x in range(1, COLS) for y in range(1, ROWS) if (arena[x, y] == 1)]
+    crates = [(x, y) for x in cols for y in rows if (arena[x, y] == 1)]
     targets = coins + dead_ends + crates
     # Add other agents as targets if in hunting mode or no crates/coins left
     if self.ignore_others_timer <= 0 or (len(crates) + len(coins) == 0):

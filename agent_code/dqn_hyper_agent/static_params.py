@@ -11,7 +11,7 @@ LEARNING_RATE = 0.01
 CURRENT_MODEL = 'dqn_hyper'
 
 # Architecture
-DENSE_LAYER_DIMS = 128
+DENSE_LAYER_DIMS = 400
 # Input of 17x17 flattened board
 STATE_SHAPE = 289
 

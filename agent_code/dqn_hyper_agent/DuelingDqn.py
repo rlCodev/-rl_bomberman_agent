@@ -6,8 +6,8 @@ class DuelingDeepQNetwork(nn.Module):
     def __init__(self):
         super(DuelingDeepQNetwork, self).__init__()
         self.dense1 = nn.Linear(c.STATE_SHAPE, c.DENSE_LAYER_DIMS)
-        self.dense2_val = nn.Linear(c.STATE_SHAPE, 1)
-        self.dense2_adv = nn.Linear(c.STATE_SHAPE, len(c.ACTIONS))
+        self.dense2_val = nn.Linear(c.DENSE_LAYER_DIMS, 1)
+        self.dense2_adv = nn.Linear(c.DENSE_LAYER_DIMS, len(c.ACTIONS))
         self.flatten = nn.Flatten()
 
         # Initialize weights using He initialization
@@ -16,8 +16,7 @@ class DuelingDeepQNetwork(nn.Module):
         nn.init.kaiming_uniform_(self.dense2_adv.weight, mode='fan_in', nonlinearity='relu')
 
     def forward(self, x):
-        size = x.size()
-        size_s = x.unsqueeze(0).size()
+        x = self.dense1(x)
 
         # Split into val and adv streams
         val, adv = torch.split(x, 1, dim=1)
