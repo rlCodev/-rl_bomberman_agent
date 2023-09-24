@@ -1,4 +1,4 @@
-from collections import namedtuple
+from collections import namedtuple, deque
 from matplotlib import pyplot as plt
 import torch
 import pickle
@@ -11,6 +11,7 @@ from torch import nn
 from torch.optim import AdamW
 from .MLP import MLP
 from .utils import action_string_to_index
+import agent_code.ql_agent.helper as helper
 
 # This is only an example!
 Transition = namedtuple('Transition',
@@ -25,9 +26,9 @@ ACTIONS = ['UP', 'RIGHT', 'DOWN', 'LEFT', 'WAIT', 'BOMB']
 
 #Number Episodes has to match the number of episodes set in the json
 NUMBER_EPISODE = 5000
-INPUT_SIZE = 867
-HIDDEN_LAYER_1_SIZE = 620
-HIDDEN_LAYER_2_SIZE = 310
+INPUT_SIZE = 30
+HIDDEN_LAYER_1_SIZE = 20
+HIDDEN_LAYER_2_SIZE = 12
 OUTPUT_SIZE = len(ACTIONS)
 
 def setup_training(self):
@@ -40,7 +41,6 @@ def setup_training(self):
     """
     self.loss_function = nn.MSELoss()
     self.losses = []
-    self.tiles_visited = []
     self.coins_collected = 0
 
     # Setup models
@@ -85,10 +85,17 @@ def game_events_occurred(self, old_game_state: dict, self_action: str, new_game_
     :param events: The events that occurred when going from  `old_game_state` to `new_game_state`
     """
     self.logger.debug(f'Encountered game event(s) {", ".join(map(repr, events))} in step {new_game_state["step"]}')
-    rewards = reward_from_events(self, events, new_game_state)
-    old_game_state_feature = torch.tensor(state_to_features(old_game_state), dtype=torch.float32).unsqueeze(0)
-    new_game_state_feature = torch.tensor(state_to_features(new_game_state), dtype=torch.float32).unsqueeze(0)
 
+    # Get feature Matrix
+    # old_feature_matrix = helper.state_to_features_matrix(self, old_game_state)
+    # new_feature_matrix = helper.state_to_features_matrix(self, new_game_state)
+
+    # Calculate Rewards
+    rewards = reward_from_events(self, events, old_game_state, new_game_state)
+
+    # Convert feature matrices to tensors
+    old_game_state_feature = torch.tensor(state_to_features(self, old_game_state), dtype=torch.float32).unsqueeze(0)
+    new_game_state_feature = torch.tensor(state_to_features(self, new_game_state), dtype=torch.float32).unsqueeze(0)
 
     # Put rewards into tensor
     reward = torch.tensor([rewards])
@@ -124,15 +131,14 @@ def end_of_round(self, last_game_state: dict, last_action: str, events: List[str
 
     :param self: The same object that is passed to all of your callbacks.
     """
-    # Compute final reward based on the last events
-    last_game_state_feature = torch.tensor(state_to_features(last_game_state), dtype=torch.float32).unsqueeze(0)
-    final_reward = reward_from_events(self, events, last_game_state)
+    # Compute final reward based on the last events=
+    final_reward = reward_from_events(self, events, last_game_state, None)
 
     # Convert final reward to a tensor
     final_reward = torch.tensor([final_reward], dtype=torch.float32)
 
     # Compute Q-value of the last state-action pair
-    last_state_feature = torch.tensor(state_to_features(last_game_state), dtype=torch.float32).unsqueeze(0)
+    last_state_feature = torch.tensor(state_to_features(self, last_game_state), dtype=torch.float32).unsqueeze(0)
     last_action = torch.tensor([[action_string_to_index(last_action)]], dtype=torch.long)
     last_q_value = self.model(last_state_feature).gather(1, last_action)
 
@@ -148,7 +154,7 @@ def end_of_round(self, last_game_state: dict, last_action: str, events: List[str
     self.episode_durations.append(self.episodes_round)
     self.episodes_coins_collected.append(self.coins_collected)
     self.episodes_round = 0
-    self.tiles_visited = []
+    self.tiles_visited = set()
     self.coins_collected = 0
     plot_durations(self, last_game_state)
     # Save model to file
@@ -164,7 +170,7 @@ def end_of_round(self, last_game_state: dict, last_action: str, events: List[str
     if (len(self.episode_durations) % 1000 == 0):
         torch.save(self.model.state_dict(), f'mlp_model_after_{len(self.episode_durations)}.pth')
 
-def reward_from_events(self, events: List[str], new_game_state) -> int:
+def reward_from_events(self, events: List[str], old_game_state: dict, new_game_state: dict) -> int:
     """
     *This is not a required function, but an idea to structure your code.*
 
@@ -172,44 +178,107 @@ def reward_from_events(self, events: List[str], new_game_state) -> int:
     certain behavior.
     """
     game_rewards = {
-        e.COIN_COLLECTED: 500,
-        e.CRATE_DESTROYED: 30,
-        e.INVALID_ACTION: -10,
-        e.KILLED_OPPONENT: 100,
-        e.GOT_KILLED: -50,
-        e.KILLED_SELF: -50,
-        e.BOMB_DROPPED: 0,
-        # e.SURVIVED_ROUND: 200,
+        e.COIN_COLLECTED: 1,
+        e.CRATE_DESTROYED: 1,
+        e.INVALID_ACTION: -1,
+        e.KILLED_OPPONENT: 1,
+        e.GOT_KILLED: -4,
+        e.KILLED_SELF: -4,
+        e.WAITED: -1,
     }
 
-    made_action = {
-        e.MOVED_LEFT: -1,
-        e.MOVED_RIGHT: -1,
-        e.MOVED_UP: -1,
-        e.MOVED_DOWN: -1,
-        e.WAITED: -3,
+    moves = {
+        e.MOVED_UP: 3,
+        e.MOVED_DOWN: 2,
+        e.MOVED_LEFT: 1,
+        e.MOVED_RIGHT: 0
     }
 
     reward_sum = 0
-    for event in events:
-        if event == e.COIN_COLLECTED:
-            self.coins_collected += 1
-        if event in game_rewards:
-            reward_sum += game_rewards[event]
-        if event in made_action:
-            reward_sum += made_action[event]
-    
-    # Add reward for visiting new tiles
-    if 'self' in new_game_state and len(new_game_state['self']) > 3:
-        if new_game_state['self'][3] not in self.tiles_visited:
-            self.tiles_visited.append(new_game_state['self'][3])
-            reward_sum += 50
-    #TODO
-    # add punishment for choosing the same illegal action multiple times in a row
-    # add reward for avoiding danger
-    # add reward for moving towards coins
 
+    # Punish for choosing invalid actions
+    if e.INVALID_ACTION in events:
+        reward_sum += game_rewards[e.INVALID_ACTION]
+
+
+    if new_game_state is not None:
+        new_features = helper.state_to_features_matrix(self, new_game_state)
+        old_features = helper.state_to_features_matrix(self, old_game_state)
+        for event in events:
+            # Check if we are even allowed to place a bomb:
+            bomb_droppable = old_features[4][5]
+
+            # Tile, where bomb effectiveness is max
+            max_bomb_effect_index = np.argmax(old_features[:, 5])
+            if event == e.BOMB_DROPPED:
+                # If we are not allowed to drop a bomb, punish
+                if bomb_droppable == -1:
+                    reward_sum -= 1
+                else:
+                    # Check if we dropped effective bomb
+                    if max_bomb_effect_index == 4:
+                        reward_sum += 1
+                    # If we are now in certain death, punish
+                    if new_features[4][4] > 0:
+                        reward_sum -= 5
+            elif event in moves:
+                # If we make move landing us in certain death, punish
+                if new_features[4][4] > 0 and new_features[4][4] != old_features[4][4]:
+                    reward_sum -= 2
+                
+                # If in danger, move away!
+                old_danger = old_features[4][3]
+                if old_danger > 0:
+                    # find best move:
+                    old_features[:, 3][old_features[:, 3] == -1] = 10
+                    max_danger_avoidance_idx = np.argmin(old_features[:, 3])
+                    # If we made the best move to avoid danger, reward
+                    if moves[event] == max_danger_avoidance_idx:
+                        reward_sum += 4
+                    else:
+                        reward_sum -= 5
+                else:
+                    # Reward for making best move toward coins
+                    if old_game_state['coins'] is not None:
+                        # Find best move towards coins
+                        old_features[:, 0][old_features[:, 0] == -1] = 100
+                        min_coindistance_idx = np.argmin(old_features[:, 0])
+                        # If we made best move, reward
+                        if moves[event] == min_coindistance_idx:
+                            reward_sum += 1
+                        # If the move was not the best, but still good, reward
+                        elif old_features[4][moves[event]] - old_features[4][min_coindistance_idx] < 2:
+                            reward_sum += 0
+                        else:
+                            reward_sum -= 1
+                    else:
+                        # Reward / punish for moving towards / away from enemies
+                        distance_to_enemies_old = old_features[4][1]
+                        distance_to_enemies_new = new_features[4][1]
+                        if distance_to_enemies_new < distance_to_enemies_old:
+                            reward_sum += (distance_to_enemies_old - distance_to_enemies_new)
+                        else:
+                            reward_sum -= (distance_to_enemies_new - distance_to_enemies_old)
+                    
+                    # If we moved but should've dropped a bomb, punish
+                    if max_bomb_effect_index == 4:
+                        reward_sum -= 1
+
+                # Reward for exploring a new tile
+                # If the move we made leads to exploring new tile => reward
+                if old_features[2][moves[event]] == 1:
+                    reward_sum += 2
+                else:
+                    reward_sum -= 1
+
+            elif event == e.COIN_COLLECTED:
+                self.coins_collected += 1
+            else:
+                if event in game_rewards:
+                    reward_sum += game_rewards[event]
+    # TODO: Check if agent in danger zone
     self.logger.info(f"Awarded {reward_sum} for events {', '.join(events)}")
+
     return reward_sum
 
 def plot_durations(self, gamestate, show_result=False):
