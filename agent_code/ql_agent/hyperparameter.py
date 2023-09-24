@@ -1,7 +1,7 @@
 import numpy as np
 
 # Hyper parameters -- TODO modify/optimize
-TRANSITION_HISTORY_SIZE = 10000  # keep only ... last transitions
+TRANSITION_HISTORY_SIZE = 100000  # keep only ... last transitions
 RECORD_ENEMY_TRANSITIONS = 1.0  # record enemy transitions with probability ...
 
 # BATCH_SIZE is the number of transitions sampled from the replay buffer
@@ -13,12 +13,12 @@ RECORD_ENEMY_TRANSITIONS = 1.0  # record enemy transitions with probability ...
 # LEARNING_RATE is the learning rate of the ``AdamW`` optimizer
 BATCH_SIZE = 64
 # Discound factor or gamma
-DISCOUNT_FACTOR = 0.8
+DISCOUNT_FACTOR = 0.5
 EPS_START = 0.99
 EPS_END = 0.1
 STATIC_EPS = 0.1
 EPS_DECAY_FACTOR = 1000000
-TAU = 0.001
+TAU = 0.0001
 LEARNING_RATE = 0.0001
 
 NUM_EPISODES = 1000

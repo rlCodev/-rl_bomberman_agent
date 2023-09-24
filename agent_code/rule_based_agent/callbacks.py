@@ -69,7 +69,7 @@ def setup(self):
     np.random.seed()
     # Fixed length FIFO queues to avoid repeating the same actions
     self.bomb_history = deque([], 5)
-    self.coordinate_history = deque([], 20)
+    self.coor_hist = deque([], 20)
     # While this timer is positive, agent will not hunt/attack opponents
     self.ignore_others_timer = 0
     self.current_round = 0
@@ -77,7 +77,7 @@ def setup(self):
 
 def reset_self(self):
     self.bomb_history = deque([], 5)
-    self.coordinate_history = deque([], 20)
+    self.coor_hist = deque([], 20)
     # While this timer is positive, agent will not hunt/attack opponents
     self.ignore_others_timer = 0
 
@@ -109,11 +109,11 @@ def act(self, game_state):
                 bomb_map[i, j] = min(bomb_map[i, j], t)
 
     # If agent has been in the same location three times recently, it's a loop
-    if self.coordinate_history.count((x, y)) > 2:
+    if self.coor_hist.count((x, y)) > 2:
         self.ignore_others_timer = 5
     else:
         self.ignore_others_timer -= 1
-    self.coordinate_history.append((x, y))
+    self.coor_hist.append((x, y))
 
     # Check which moves make sense at all
     directions = [(x, y), (x + 1, y), (x - 1, y), (x, y + 1), (x, y - 1)]

@@ -125,6 +125,8 @@ def game_events_occurred(self, old_game_state: dict, self_action: str, new_game_
     #     math.exp(-1. * self.steps_done / EPS_DECAY_FACTOR)
     self.eps_threshold = c.EPS_START * (1 - (len(self.episode_durations) / c.NUM_EPISODES))
     self.steps_done += 1
+    if self.steps_done % 4 == 0:
+        update_model(self)
     # print("Rewards: ", reward)
 
     # update_model(self)
@@ -198,6 +200,32 @@ def reward_from_events(self, events: List[str], old_game_state: dict, self_actio
     Here you can modify the rewards your agent get so as to en/discourage
     certain behavior.
     """
+
+    # alternative = {
+    #    e.MOVED_DOWN: -1,
+    #    e.MOVED_UP: -1,
+    #    e.MOVED_LEFT: -1,
+    #    e.MOVED_RIGHT: -1,
+    #    e.WAITED: -2,
+    #    e.INVALID_ACTION: -5,
+    #    e.KILLED_OPPONENT: 500,
+    #    e.KILLED_SELF: -300,
+    #    e.GOT_KILLED: -300,
+    #    e.CRATE_DESTROYED: 30,
+    #    e.COIN_COLLECTED: 50
+    # }
+    # reward_sum = 0
+    # # Reward for coins collected
+    # for event in events:
+    #     if event in alternative:
+    #         reward_sum += alternative[event]
+    # self.logger.info(f"Awarded {reward_sum} for events {', '.join(events)}")
+    # return reward_sum
+
+
+
+
+
     game_rewards = {
         e.COIN_COLLECTED: 100,
         e.CRATE_DESTROYED: 30,
@@ -249,13 +277,13 @@ def reward_from_events(self, events: List[str], old_game_state: dict, self_actio
             else:
                 reward_sum -= (distance_to_enemies_new - distance_to_enemies_old) * enemy_reward_factor
 
-        # Reward for exploring a new tile
-        if new_game_state is not None and 'self' in new_game_state and len(new_game_state['self']) > 3:
-            if new_game_state['self'][3] not in self.tiles_visited:
-                # self.tiles_visited.append(new_game_state['self'][3])
-                reward_sum += 10
-            else:
-                reward_sum -= 10
+        # # Reward for exploring a new tile
+        # if new_game_state is not None and 'self' in new_game_state and len(new_game_state['self']) > 3:
+        #     if new_game_state['self'][3] not in self.tiles_visited:
+        #         # self.tiles_visited.append(new_game_state['self'][3])
+        #         reward_sum += 10
+        #     else:
+        #         reward_sum -= 10
 
         # Reward for moving away from danger
         old_danger = old_features[4][3]
@@ -270,25 +298,9 @@ def reward_from_events(self, events: List[str], old_game_state: dict, self_actio
         new_certain_death = new_features[4][4]
 
         if new_certain_death > old_certain_death:
-            reward_sum -= 100
+            reward_sum -= 40
         else:
-            reward_sum += 100
-        
-    
-
-    # Reward for placing bomb when Bomb effectiveness is max
-    # if(e.BOMB_DROPPED in events):
-    #     # Find out, if placing the bomb at the position we were standing in was the best option
-    #     max_bomb_effectiveness = old_features[0][5] 
-    #     index = 0
-    #     for row in old_features:
-    #         if row[5] >=  max_bomb_effectiveness:
-    #             max_bomb_effectiveness = row[5]
-    #             index = np.where(row == old_features)[0]
-    #             # index = old_features.index(row)
-
-    #     if(index == 4):
-    #         reward_sum += 50
+            reward_sum += 40
 
 
     if e.BOMB_DROPPED in events:
@@ -311,15 +323,18 @@ def reward_from_events(self, events: List[str], old_game_state: dict, self_actio
     
 
     # Punish for same actions in a row and reward diverse actions
-
     action_history_len = len(self.action_history)
-    count_action = self.action_history.count(self_action)
-    proportion = count_action/action_history_len
-    diversity_reward = action_history_len/count_action
-    if proportion > 0.5:
-        reward_sum -= np.round(diversity_reward * 3)
-    else:
-        reward_sum += np.round(diversity_reward * 3)
+    if action_history_len > 4:
+        count_action = self.action_history.count(self_action)
+        if count_action == 0:
+            reward_sum += 10
+        else:
+            proportion = count_action/action_history_len
+            diversity_reward = action_history_len/count_action
+            if proportion > 0.5:
+                reward_sum -= np.round(diversity_reward * 3)
+            else:
+                reward_sum += np.round(diversity_reward * 3)
 
     # Bomb doged reward
     
@@ -334,8 +349,8 @@ def reward_from_events(self, events: List[str], old_game_state: dict, self_actio
     for event in events:
         if event == e.COIN_COLLECTED:
             self.coins_collected += 1
-        # if event in game_rewards:
-        #     reward_sum += game_rewards[event]
+        if event in game_rewards:
+            reward_sum += game_rewards[event]
     # TODO: Check if agent in danger zone
     self.logger.info(f"Awarded {reward_sum} for events {', '.join(events)}")
 
@@ -391,6 +406,7 @@ def update_model(self):
     # Compute Huber loss
     criterion = nn.SmoothL1Loss()
     loss = criterion(state_action_values, expected_state_action_values.unsqueeze(1))
+    self.logger.debug(f'Loss: {loss}')
     self.losses.append(loss)
 
     # print(f"Episode {len(self.episode_durations)} Loss: {loss.detach().numpy().item()}")

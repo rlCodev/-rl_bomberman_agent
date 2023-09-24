@@ -39,7 +39,7 @@ def setup(self):
     self.current_round = 0
 
     self.tiles_visited = set()
-    self.coordinate_history = deque([], 10)
+    self.coor_hist = deque([], 10)
 
     if not os.path.isfile("custom_mlp_policy_model.pth") and not self.train:
         # Size of feature representation below
@@ -86,7 +86,8 @@ def act(self, game_state: dict) -> str:
     #     else:
     #         return np.random.choice(ACTIONS, p=[.2, .2, .2, .2, .1, .1]) 
     action_chosen = None
-    if self.train and random.random() < self.eps_threshold:
+    # if self.train and random.random() < self.eps_threshold:
+    if self.train and random.random() < 0.7:
         # 80%: walk in any direction. 10% wait. 10% bomb.
         # return np.random.choice(ACTIONS, p=[.2, .2, .2, .2, .1, .1])
         # rule_based_action = rule_based_agent.act(self, game_state)
@@ -107,7 +108,7 @@ def act(self, game_state: dict) -> str:
                     x, y = game_state['self'][3] + helper.get_step(action_chosen)
                 except:
                     x, y = game_state['self'][3]
-                if self.coordinate_history.count((x, y)) > 4:
+                if self.coor_hist.count((x, y)) > 4:
                     self.logger.debug("LOOP DETECTED")
                     try:
                         valid_actions = helper.get_valid_action_strings(game_state)
@@ -117,7 +118,7 @@ def act(self, game_state: dict) -> str:
                         action_chosen = 'DOWN'
             
                 new_pos = tuple(helper.get_step(action_chosen) + game_state['self'][3])
-                self.coordinate_history.append(new_pos)
+                self.coor_hist.append(new_pos)
             # action_index = self.policy_net(state).argmax().item()
             # print(action_index)
             # chosen_action = ACTIONS[action_index]
