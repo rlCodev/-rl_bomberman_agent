@@ -85,7 +85,7 @@ def act(self, game_state: dict) -> str:
     return hp.ACTIONS[action]
 
 
-def state_to_features(game_state: dict) -> torch.tensor:
+def state_to_features(game_state: dict):
     """
     Converts the game state to the input of your model, i.e.
     a feature vector.print(new_state_vector[0])
@@ -200,6 +200,7 @@ def state_to_features(game_state: dict) -> torch.tensor:
 
     stacked_channels = np.concatenate(
         (stacked_channels, own_bomb))  # flatten feature vector
+
     return torch.tensor(stacked_channels, dtype=torch.float32)
 
 

@@ -1,6 +1,5 @@
 from collections import deque
 import os
-from agent_code.dqn_hyper_agent.features import state_to_features
 import agent_code.ql_agent.helper as helper
 from .DuelingDqn import DuelingDeepQNetwork
 import numpy as np
@@ -239,7 +238,7 @@ def act(self, game_state):
         # self.logger.info("Model picked {}".format(hp.ACTIONS[action]))
 
         # Assuming state_to_features returns a NumPy array, convert it to a PyTorch tensor
-        state = state_to_features(game_state)
+        # state = state_to_features(game_state)
 
         # Replace self.online_model.predict with forward pass of the model
         # Assuming self.online_model is a PyTorch model
