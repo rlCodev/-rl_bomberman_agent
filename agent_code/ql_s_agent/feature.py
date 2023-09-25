@@ -1,7 +1,6 @@
 import numpy as np
 from collections import deque
 import settings as s
-from utils import get_min_distance
 import torch
 
 STEP = np.array([(0,-1), (0,1), (-1,0), (1,0)])
@@ -24,9 +23,9 @@ def state_to_features(game_state: dict) -> np.array:
 
     # Danger map: [0,1], the higher the value, the more dangerous (1 = explosion) | for each tile
     danger_map = get_danger_map(game_state['field'], game_state['bombs'], game_state['explosion_map'])
-    adjusted_danger_map = get_adjusted_danger_map(game_state['field'], danger_map)
-    coin_map = get_coin_map(game_state['field'], game_state['coins'])
-    adjusted_coin_map = get_adjusted_coin_map(game_state['field'], coin_map)
+    adjusted_danger_map = get_adjusted_danger_map(game_state, danger_map)
+    coin_map = get_coin_map(game_state)
+    adjusted_coin_map = get_adjusted_coin_map(game_state, coin_map)
     crate_map = get_crate_map(game_state['field'])
     crates_positions = np.argwhere(crate_map == 1)
 
@@ -34,7 +33,7 @@ def state_to_features(game_state: dict) -> np.array:
     if danger_map[position[0], position[1]] > 0:
         safety_potentials = get_safety_potentials(adjusted_danger_map, position)
     else:
-        safety_potentials = {step: 0 for step in STEP}
+        safety_potentials = {tuple(step): 0 for step in STEP.tolist()}
 
     # Get segments for defining potentials to nearest opponent and crate:
     segments = get_segments(position)
@@ -47,9 +46,9 @@ def state_to_features(game_state: dict) -> np.array:
 
     # Get distance potentials to nearest coin
     if(game_state['coins'] != []):
-        delta_coins_potentials = get_delta_coins_potentials(game_state, position, adjusted_coin_map)
+        delta_coins_potentials = get_delta_coins_potentials(position, adjusted_coin_map)
     else:
-        delta_coins_potentials = {step: 0 for step in STEP}
+        delta_coins_potentials = {tuple(step): 0 for step in STEP.tolist()}
 
     for step in STEP:
         # For each step we define a vector and append it to our matrix at the end.
@@ -73,21 +72,22 @@ def state_to_features(game_state: dict) -> np.array:
         move_feature_vector[3] = danger_map[pos_after_move[0], pos_after_move[1]]
 
         # Check for nearest safe tile
-        move_feature_vector[4] = safety_potentials[step]
+        move_feature_vector[4] = safety_potentials[tuple(step)]
 
         # Check for distance to coin
-        move_feature_vector[5] = delta_coins_potentials[step]
+        move_feature_vector[5] = delta_coins_potentials[tuple(step)]
 
         # Check for distance to crate
-        move_feature_vector[6] = delta_crates_potentials[step]
+        move_feature_vector[6] = delta_crates_potentials[tuple(step)]
 
         # Check for distance to enemy
-        move_feature_vector[7] = delta_opponents_potentials[step]
+        move_feature_vector[7] = delta_opponents_potentials[tuple(step)]
 
         feature_matrix.append(move_feature_vector)
 
     #combining current channels:
     stacked_channels = np.stack(feature_matrix).reshape(-1)
+    test_stack = np.stack(feature_matrix)
     
     # TODO: Maybe add backtracking?
     #our agent needs to now whether bomb action is possible
@@ -98,7 +98,9 @@ def state_to_features(game_state: dict) -> np.array:
         own_bomb.append(0)                      #if not, apppend 0
     
     stacked_channels = np.concatenate((stacked_channels, own_bomb)) #flatten feature vector
-    return torch.tensor(stacked_channels, dtype=torch.float32)
+
+
+    return torch.tensor(stacked_channels, dtype=torch.float32), test_stack
 
 
 def get_danger_map(field, bombs, explosion_map):
@@ -106,7 +108,7 @@ def get_danger_map(field, bombs, explosion_map):
     returns a 2d array with danger values for each tile. 
     The danger is within [0,1], with 1 being certain death and 0 being no danger at all.
     '''
-    danger_map = np.zeros_like(field)
+    danger_map = np.zeros_like(field, dtype = np.float32)
     bomb_timer = s.BOMB_TIMER
 
     for bomb_position, countdown in bombs:
@@ -132,11 +134,11 @@ def get_danger_map(field, bombs, explosion_map):
 
     return danger_map
 
-def get_coin_map(field, coins):
+def get_coin_map(field):
     '''
     Returns a replica of the field, with 1 where coins are and 0 otherwise
     '''
-    coin_map = np.zeros_like(field)
+    coin_map = np.zeros_like(field['field'], dtype = np.float32)
     if field['coins'] == []:
         return coin_map
     else:
@@ -145,7 +147,7 @@ def get_coin_map(field, coins):
     return coin_map
 
 def get_crate_map(field):
-    crate_map = np.zeros_like(field)
+    crate_map = np.zeros_like(field, dtype = np.float32)
     crate_map[field == 1] = 1
     return crate_map
     
@@ -157,10 +159,12 @@ def get_adjusted_danger_map(game_state, danger_map):
     # Define new field, where all obstacles are set to 1
     field_with_obstacles = game_state['field'].copy()                                         
     field_with_obstacles = np.where(field_with_obstacles == -1 , 1, field_with_obstacles)
-    for enemy in game_state['others']:
-        field_with_obstacles[enemy[3][0],enemy[3][1]] = 1
-    for bomb in game_state['bombs'][0]:
-        field_with_obstacles[bomb[0],bomb[1]] = 1
+    if game_state['others'] != []:
+        for enemy in game_state['others']:
+            field_with_obstacles[enemy[3][0],enemy[3][1]] = 1
+    if game_state['bombs'] != []:
+        for bomb in game_state['bombs']:
+            field_with_obstacles[bomb[0][0],bomb[0][1]] = 1
 
     # Set all tiles, where danger is > 0 to 5
     danger_map = np.where(danger_map > 0, 5, danger_map)
@@ -176,10 +180,12 @@ def get_adjusted_coin_map(game_state, coin_map):
     # Define new field, where all obstacles are set to 1
     field_with_obstacles = game_state['field'].copy()                                         
     field_with_obstacles = np.where(field_with_obstacles == -1 , 1, field_with_obstacles)
-    for enemy in game_state['others']:
-        field_with_obstacles[enemy[3][0],enemy[3][1]] = 1
-    for bomb in game_state['bombs'][0]:
-        field_with_obstacles[bomb[0],bomb[1]] = 1
+    if game_state['others'] != []:
+        for enemy in game_state['others']:
+            field_with_obstacles[enemy[3][0],enemy[3][1]] = 1
+    if game_state['bombs'] != []:
+        for bomb in game_state['bombs']:
+            field_with_obstacles[bomb[0][0],bomb[0][1]] = 1
 
     # Set all tiles, where coin = 1 to 3
     coin_map = np.where(coin_map == 1, 3, coin_map)
@@ -197,22 +203,21 @@ def get_safety_potentials(adjusted_danger_map, player_pos):
     for step in STEP:
         distances.append(width_search_danger(adjusted_danger_map, player_pos + step, player_pos))      
     
-    if np.sum(distances) == 0: return distances                              #no free tile was found -> our agent is doomed
+    if np.sum(distances) == 0: return {tuple(step): 0 for step in STEP.tolist()}
+    tile_count_ratio = distances * 1/max(distances)
 
-    tile_count_ratio = distances * 1/max(distances)                           #multiply with minimal distance found. Note that width_search_danger retruns inverted distances, so 
-                                                                                #  1/max(tile_count) = 1/ (1/min(dist)) = min(dist)
-    potentials = {step: ratio for step, ratio in zip(STEP, tile_count_ratio)}          
+    potentials = {tuple(step): ratio for step, ratio in zip(STEP, tile_count_ratio)}          
     return potentials
 
 def get_delta_coins_potentials(player, adj_coin_map):
     steps_to_coins = []
     for step in STEP:
         steps_to_coins.append(bfs_position_to_object(player, player + step, adj_coin_map)) 
-        
+    steps_to_coins = np.array(steps_to_coins)
     if max(steps_to_coins) != 0:                                            #return for each neighbor: #steps to coin / #minimal steps to coin
         steps_to_coins = steps_to_coins * 1/max(steps_to_coins)
     
-    return {step: ratio for step, ratio in zip(STEP, steps_to_coins)}
+    return {tuple(step): ratio for step, ratio in zip(STEP, steps_to_coins)}
 
 def get_neighbor_pos(player):
     '''
@@ -263,7 +268,7 @@ def get_delta_opponents_potentials(game_state, segments, player):
     else:
         distances = np.zeros(4)
 
-    potentials = {step: ratio for step, ratio in zip(STEP, distances)}
+    potentials = {tuple(step): ratio for step, ratio in zip(STEP, distances)}
     return potentials
 
 
@@ -293,12 +298,12 @@ def get_delta_crates_potentials(game_state, segments, player, crates_present):
             else:
                 distance_to_crates = np.subtract(crates_present[crates_in_segment[0]], player)
                 normalized_distance = np.linalg.norm(distance_to_crates, axis = 1)
-                min_distance = 2 / (1 + min(normalized_distance))
+                min_distance = len(normalized_distance)/len(crates_present)
                 distances.append(min_distance)
     else:
         distances = np.zeros(4)
 
-    potentials = {step: ratio for step, ratio in zip(STEP, distances)}
+    potentials = {tuple(step): ratio for step, ratio in zip(STEP, distances)}
     return potentials
 
 
@@ -405,7 +410,7 @@ def width_search_danger(field, neighbor_pos, player_pos):
                     q.append(neighbor)                                                      # neighbor is not yet in q
                     tiles_visited.append(neighbor)
 
-
+    tiles = np.array(tiles)
     if len(tiles) == 0:                                                             # no free tiles were found for this neighbor
         return 0
     if len(tiles) == 1:                                                             # one free tile was found 
@@ -429,9 +434,9 @@ def get_crate_dist(field, segments, player):
 
     '''
 
-    crates_position = np.array([np.where(field == 1)[0], np.where(field == 1)[1]]).T    #get positiosn of crates
+    crates_position = np.array([np.where(field == 1)[0], np.where(field == 1)[1]]).T
     
-    densities = []                                                                      #array that holds the density for each segment
+    densities = []
     
     if crates_position.size > 0:
         for segment in segments:
@@ -439,7 +444,7 @@ def get_crate_dist(field, segments, player):
             
             crates_in_segment = np.where((crates_position[:,0] > segment[0,0]) & (crates_position[:, 0] < segment[0,1]) & (crates_position[:, 1] > segment[1,0]) & (crates_position[:,0] < segment[1,1]))
             
-            if len(crates_in_segment[0]) == 0:              # no crates in segment -> conitnue
+            if len(crates_in_segment[0]) == 0:
                 densities.append(0)
                 continue
             
@@ -447,7 +452,7 @@ def get_crate_dist(field, segments, player):
         
             dist_norm = np.linalg.norm(d_crates, axis = 1)
         
-            density = len(dist_norm)/len(crates_position)   # get ratio of (crates in this segment)/(all crates)
+            density = len(dist_norm)/len(crates_position)
             
             densities.append(density)
         
@@ -474,31 +479,21 @@ def get_segments(player):
     return segments
 
 def bfs_position_to_object(player_pos, neighbouring_tile, field):
-    '''
-    Search for certain object in game_state['field'] via width-first search. 
-
-    :param player_pos: postion of play [x,y] (np.array)
-    :param neighbouring_tile: position of neighbor [x,y] (np.array)
-    :param field: game_state['field']. The object to be searched for needs to be set to 3 in this field before calling the function
-
-    :returns: inverted number of steps to closest object
-    '''
     
-    # Check if neighbouring tile is already the object
     if field[neighbouring_tile[0],neighbouring_tile[1]] != 0 :            
         if field[neighbouring_tile[0],neighbouring_tile[1]] == 3: 
             return 1  
         return 0
     
     rows, cols = field.shape
-    flat_neighbor = cols * neighbouring_tile[0] + neighbouring_tile[1]
-    flat_player = cols * player_pos[0] + player_pos[1]
+    neighbor_flattened = cols * neighbouring_tile[0] + neighbouring_tile[1]
+    player_flattened = cols * player_pos[0] + player_pos[1]
     flat_obj = None
 
     parents = [None] * (rows * cols) 
 
-    parents[flat_neighbor] = flat_neighbor
-    parents[flat_player] = flat_player
+    parents[neighbor_flattened] = neighbor_flattened
+    parents[player_flattened] = player_flattened
 
     q = deque()
     q.append(neighbouring_tile)              
@@ -521,7 +516,7 @@ def bfs_position_to_object(player_pos, neighbouring_tile, field):
         return 0                  
     
     path = [flat_obj]
-    while path[-1] != flat_neighbor:
+    while path[-1] != neighbor_flattened:
         path.append(parents[path[-1]])
     
     return 1/len(path)
