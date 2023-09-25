@@ -257,11 +257,12 @@ def get_custom_rewards(self, old_game_state, self_action, new_game_state, events
             danger_map = get_danger_map(old_game_state['field'], old_game_state['bombs'], old_game_state['explosion_map'])
             danger_of_new_position = danger_map[new_self_position[0], new_self_position[1]]
             danger_of_old_position = danger_map[old_self_position[0], old_self_position[1]]
-            if danger_of_new_position != 0 or danger_of_new_position != 0:
-                if danger_of_new_position < danger_of_old_position:
-                    cust_rewards += 0.5
-                else: 
-                    cust_rewards -= 0.5
+            if danger_of_new_position == 0 and danger_of_old_position != 0:
+                cust_rewards += 0.5
+            elif danger_of_new_position != 0 and danger_of_old_position == 0:
+                cust_rewards -= 0.5
+            if danger_of_old_position != 0 and (e.WAITED in events or e.INVALID_ACTION in events):
+                cust_rewards -= 0.5
 
         # Reward for moving closer to crates if agent could place a bomb
         crate_positions_old = utils.get_crate_positions(old_game_state)
@@ -466,9 +467,9 @@ def aux_events(self, old_game_state, self_action, new_game_state, events):
 
     #define opponent chaser
     if len(enemys) != 0:                                                            
-        distances_old = np.linalg.norm(np.subtract(old_player_coor,enemys),axis=1)
-        distances_new = np.linalg.norm(np.subtract(new_player_coor,enemys),axis=1)
-        if min(distances_new) < min(distances_old):                                 #if agent moved closer to the closest enemy -> rewards
+        old_dist = np.linalg.norm(np.subtract(old_player_coor,enemys),axis=1)
+        new_dist = np.linalg.norm(np.subtract(new_player_coor,enemys),axis=1)
+        if min(new_dist) < min(old_dist):                                 #if agent moved closer to the closest enemy -> rewards
             events.append(OPPONENT_CHASER)
     cust_rew = 0
     for event in events:

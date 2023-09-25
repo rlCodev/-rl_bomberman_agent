@@ -406,18 +406,18 @@ def width_search_danger(field, neighbor_pos, player_pos):
                 tiles.append(neighbor)                                          
                 
             elif field[neighbor[0], neighbor[1]] == DANGER_TILE:                                        #check if neighbor is wall or crate, if not...
-                if not np.any(np.sum(np.abs(tiles_visited - neighbor), axis=1) == 0):       # if neighbor is already in the q, dont append
-                    q.append(neighbor)                                                      # neighbor is not yet in q
+                if not np.any(np.sum(np.abs(tiles_visited - neighbor), axis=1) == 0):
+                    q.append(neighbor)
                     tiles_visited.append(neighbor)
 
     tiles = np.array(tiles)
-    if len(tiles) == 0:                                                             # no free tiles were found for this neighbor
+    if len(tiles) == 0:
         return 0
-    if len(tiles) == 1:                                                             # one free tile was found 
+    if len(tiles) == 1:
         return 1/np.linalg.norm(tiles - player_pos, ord=1)
     
     
-    dist = np.linalg.norm(tiles - player_pos, axis=1, ord=1)                           #multiple free tiles were found 
+    dist = np.linalg.norm(tiles - player_pos, axis=1, ord=1) 
     return 1/min(dist)
 
 
