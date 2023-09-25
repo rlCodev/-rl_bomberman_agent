@@ -1,3 +1,5 @@
+import numpy as np
+
 ACTIONS = ['UP', 'RIGHT', 'DOWN', 'LEFT', 'WAIT', 'BOMB']
 # Function to convert action space index to string action
 def action_index_to_string(action_index):
@@ -10,7 +12,6 @@ def action_string_to_index(action_string):
     else:
         raise ValueError(f"Invalid action: {action_string}")
     
-
 def get_own_position(game_state):
     return game_state['self'][3]
 
