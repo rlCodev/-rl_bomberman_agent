@@ -220,36 +220,51 @@ def reward_from_events(self, events: List[str]) -> int:
         Input: self, list of events
         Output: sum of rewards resulting from the events
     '''
-    # TODO: Divide rewards by 10
-    # TODO: Split rewards into game rewards and move rewards. If event in moves, then += -1
+    # TODO: Divide rewards by 10 :Done
+    # TODO: Split rewards into game rewards and move rewards. If event in moves, then += -1: Done
     game_rewards = {
-        e.COIN_COLLECTED: 8,
-        e.KILLED_OPPONENT: 20,
-        e.KILLED_SELF: -80,
-        e.WAITED: -1,
-        e.INVALID_ACTION: -4,
-        e.MOVED_DOWN: -1,
-        e.MOVED_LEFT: -1,
-        e.MOVED_RIGHT: -1,
-        e.MOVED_UP: -1,
-        COIN_CHASER: 3,             
-        MOVED_OUT_OF_DANGER: 5,
-        STAYED_NEAR_BOMB: -5,
-        MOVED_INTO_DANGER: -5,
-        CRATE_CHASER: 1.5,
-        BOMB_NEXT_TO_CRATE: 2,
-        BOMB_NOT_NEXT_TO_CRATE: -2,
-        DROPPED_BOMB_NEAR_ENEMY: 1,
-        DROPPED_BOMB_NEXT_TO_ENEMY: 8, 
-        OPPONENT_CHASER: 2
+        e.COIN_COLLECTED: 0.8,
+        e.KILLED_OPPONENT: 2,
+        e.KILLED_SELF: -8,
+        e.INVALID_ACTION: -0.4,
+        COIN_CHASER: 0.3,             
+        MOVED_OUT_OF_DANGER: 0.5,
+        STAYED_NEAR_BOMB: -0.5,
+        MOVED_INTO_DANGER: -0.5,
+        CRATE_CHASER: 0.15,
+        BOMB_NEXT_TO_CRATE: 0.2,
+        BOMB_NOT_NEXT_TO_CRATE: -0.2,
+        DROPPED_BOMB_NEAR_ENEMY: 0.1,
+        DROPPED_BOMB_NEXT_TO_ENEMY: 0.8, 
+        OPPONENT_CHASER: 0.2
+    }
+    move_rewards = {
+        e.WAITED: -0.1,
+        e.MOVED_DOWN: -0.1,
+        e.MOVED_LEFT: -0.1,
+        e.MOVED_RIGHT: -0.1,
+        e.MOVED_UP: -0.1,
     }
 
     reward_sum = 0
     for event in events:
         if event in game_rewards:
             reward_sum += game_rewards[event]
+        if event in move_rewards:
+            reward_sum += -0.1
     self.logger.info(f"Awarded {reward_sum} for events {', '.join(events)}")
     return reward_sum
+
+def get_custom_rewards(self, old_game_state, self_action, new_game_state, events):
+    '''
+        Input: self, old_game_state, self_action, new_game_state, events
+        Output: sum of rewards resulting from the events
+    '''
+    new_self_position = get_own_position(new_game_state)
+    old_self_position = get_own_position(old_game_state)
+
+def get_own_position(game_state):
+    return game_state['self'][3]
 
 
 # TODO: Change this to get_custom_rewards()
