@@ -1,3 +1,6 @@
+import numpy as np
+
+
 ACTIONS = ['UP', 'RIGHT', 'DOWN', 'LEFT', 'WAIT', 'BOMB']
 # Function to convert action space index to string action
 def action_index_to_string(action_index):
@@ -12,7 +15,8 @@ def action_string_to_index(action_string):
     
 
 def get_own_position(game_state):
-    return game_state['self'][3]
+    agent = game_state['self']
+    return agent[3]
 
 def get_bombs_position(game_state):
     return [bomb[3] for bomb in game_state['bombs']]
@@ -28,6 +32,9 @@ def get_distance_list(pos, pos_list):
     return [np.linalg.norm(np.subtract(pos, pos_two)) for pos_two in pos_list]
 
 def get_min_distance(pos, pos_list):
+    # Input pos -> [x,y]
+    # Input pos_list -> [[x1,y1], [x2,y2], ...]
+    # Output -> min_distance
     return min(get_distance_list(pos, pos_list))
 
 def get_crate_positions(game_state):
