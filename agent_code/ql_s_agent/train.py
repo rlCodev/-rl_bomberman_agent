@@ -104,8 +104,7 @@ def game_events_occurred(self, old_game_state: dict, self_action: str, new_game_
     # new_feature_matrix = helper.state_to_features_matrix(self, new_game_state)
 
     # Calculate Rewards
-    events = aux_events(self, old_game_state, self_action, new_game_state, events)
-    rewards = reward_from_events(self, events)
+    rewards = reward_from_events(self, old_game_state, self_action, new_game_state, events)
     self.episode_reward = rewards
 
     # Convert feature matrices to tensors
@@ -114,7 +113,7 @@ def game_events_occurred(self, old_game_state: dict, self_action: str, new_game_
 
     # Put rewards into tensor
     reward = torch.tensor([rewards])
-    action = torch.tensor([action_string_to_index(self_action)], dtype=torch.long)
+    action = torch.tensor([utils.action_string_to_index(self_action)], dtype=torch.long)
 
     self.episodes_round += 1
     self.steps_done += 1
@@ -157,7 +156,7 @@ def end_of_round(self, last_game_state: dict, last_action: str, events: List[str
 
     # Compute final reward based on the last events=
     # events = aux_events(self, last_game_state, last_action, None, events)
-    final_reward = reward_from_events(self, events)
+    final_reward = reward_from_events(self, last_game_state, last_action, None, events)
     self.episode_reward = final_reward
 
     # Convert final reward to a tensor
@@ -165,7 +164,7 @@ def end_of_round(self, last_game_state: dict, last_action: str, events: List[str
 
     # Compute Q-value of the last state-action pair
     last_state_feature = state_to_features(last_game_state)
-    last_action = torch.tensor([action_string_to_index(last_action)], dtype=torch.long)
+    last_action = torch.tensor([utils.action_string_to_index(last_action)], dtype=torch.long)
     last_q_value = self.model(last_state_feature).gather(-1, last_action)
 
     # Compute the loss
@@ -200,7 +199,7 @@ def end_of_round(self, last_game_state: dict, last_action: str, events: List[str
     if (len(self.episode_durations) % 1000 == 0):
         torch.save(self.model.state_dict(), f'mlp_model_after_{len(self.episode_durations)}.pth')
 
-def reward_from_events(self, events: List[str]) -> int:
+def reward_from_events(self, old_game_state, self_action, new_game_state, events: List[str]) -> int:
     '''
         Input: self, list of events
         Output: sum of rewards resulting from the events
@@ -211,17 +210,7 @@ def reward_from_events(self, events: List[str]) -> int:
         e.COIN_COLLECTED: 0.8,
         e.KILLED_OPPONENT: 2,
         e.KILLED_SELF: -8,
-        e.INVALID_ACTION: -0.4,
-        COIN_CHASER: 0.3,             
-        MOVED_OUT_OF_DANGER: 0.5,
-        STAYED_NEAR_BOMB: -0.5,
-        MOVED_INTO_DANGER: -0.5,
-        CRATE_CHASER: 0.15,
-        BOMB_NEXT_TO_CRATE: 0.2,
-        BOMB_NOT_NEXT_TO_CRATE: -0.2,
-        DROPPED_BOMB_NEAR_ENEMY: 0.1,
-        DROPPED_BOMB_NEXT_TO_ENEMY: 0.8, 
-        OPPONENT_CHASER: 0.2
+        e.INVALID_ACTION: -0.4
     }
     move_rewards = {
         e.WAITED: -0.1,
@@ -237,6 +226,7 @@ def reward_from_events(self, events: List[str]) -> int:
             reward_sum += game_rewards[event]
         if event in move_rewards:
             reward_sum += -0.1
+    reward_sum += get_custom_rewards(self, old_game_state, self_action, new_game_state, events)
         
     self.logger.info(f"Awarded {reward_sum} for events {', '.join(events)}")
     return reward_sum
@@ -249,58 +239,75 @@ def get_custom_rewards(self, old_game_state, self_action, new_game_state, events
 
     cust_rewards = 0
 
-    new_self_position = utils.get_own_position(new_game_state)
-    old_self_position = utils.get_own_position(old_game_state)
+    if new_game_state is not None:
 
-    # Reward for moving closer to coins
-    old_coin_distance = utils.get_min_distance(old_self_position, old_game_state['coins'])
-    new_coin_distance = utils.get_min_distance(new_self_position, new_game_state['coins'])
-    coin_dist = old_coin_distance - new_coin_distance
-    if coin_dist > 0:
-        # cust_rewards += coin_dist * 0.1
-        cust_rewards += 0.3
+        old_self_position = utils.get_own_position(old_game_state)
+        new_self_position = utils.get_own_position(new_game_state)
 
-    # Evaluate danger of new position
-    # Give positive rewards for avoiding danger and negative for staying or moving into danger
-    danger_map = get_danger_map(old_game_state['field'], old_game_state['bombs'], old_game_state['explosion_map'])
-    danger_of_new_position = danger_map[new_self_position[0], new_self_position[1]]
-    danger_of_old_position = danger_map[old_self_position[0], old_self_position[1]]
-    if danger_of_new_position != 0 or danger_of_new_position != 0:
-        if danger_of_new_position < danger_of_old_position:
-            cust_rewards += 0.5
-        else: 
-            cust_rewards -= 0.5
+        # Reward for moving closer to coins
+        if len(old_game_state['coins']) > 0 and len(new_game_state['coins']) > 0:
+            try:
+                old_coin_distance = utils.get_min_distance(old_self_position, old_game_state['coins'])
+                new_coin_distance = utils.get_min_distance(new_self_position, new_game_state['coins'])
+                coin_dist = old_coin_distance - new_coin_distance
+                if coin_dist > 0:
+                    # cust_rewards += coin_dist * 0.1
+                    cust_rewards += 0.3
+            except:
+                pass
 
-    # Reward for moving closer to crates if agent could place a bomb
-    if utils.is_bomb_available(old_game_state):
-        old_crate_distance = utils.get_min_distance(old_self_position, utils.get_crate_positions(old_game_state))
-        new_crate_distance = utils.get_min_distance(new_self_position, utils.get_crate_positions(new_game_state))
-        crate_dist = old_crate_distance - new_crate_distance
-        if crate_dist > 0:
-            cust_rewards += 0.15
+        # Evaluate danger of new position
+        # Give positive rewards for avoiding danger and negative for staying or moving into danger
+        if len(old_game_state['bombs']) > 0:
+            danger_map = get_danger_map(old_game_state['field'], old_game_state['bombs'], old_game_state['explosion_map'])
+            danger_of_new_position = danger_map[new_self_position[0], new_self_position[1]]
+            danger_of_old_position = danger_map[old_self_position[0], old_self_position[1]]
+            if danger_of_new_position != 0 or danger_of_new_position != 0:
+                if danger_of_new_position < danger_of_old_position:
+                    cust_rewards += 0.5
+                else: 
+                    cust_rewards -= 0.5
 
-    # Rewards for good bomb placement
-    others_positions = utils.get_others_positions(old_game_state)
-    if self_action == e.BOMB_DROPPED and e.INVALID_ACTION not in events:
-        # Reward for bomb next to crate
-        if old_crate_distance == 1:
-            cust_rewards += 0.2
-        # Penalty for bomb not next to crate
-        else:
-            cust_rewards -= 0.2
+        # Reward for moving closer to crates if agent could place a bomb
+        crate_positions_old = utils.get_crate_positions(old_game_state)
+        crate_positions_new = utils.get_crate_positions(old_game_state)
+        if utils.is_bomb_available(old_game_state) and len(crate_positions_old) > 0 and len(crate_positions_new) > 0:
+            try:
+                old_crate_distance = utils.get_min_distance(old_self_position, crate_positions_old)
+                new_crate_distance = utils.get_min_distance(new_self_position, crate_positions_new)
+                crate_dist = old_crate_distance - new_crate_distance
+                if crate_dist > 0:
+                    cust_rewards += 0.15
+            except:
+                pass
 
-        # Reward for bomb next to enemy
-        old_others_distance = utils.get_min_distance(old_self_position, others_positions)
-        new_others_distance = utils.get_min_distance(new_self_position, others_positions)
-        if len(others_positions) != 0:
-            if old_others_distance == 1:
-                cust_rewards += 0.8
+        # Rewards for good bomb placement
+        others_positions = utils.get_others_positions(old_game_state)
+        if self_action == e.BOMB_DROPPED and e.INVALID_ACTION not in events and len(others_positions) > 0:
+            # Reward for bomb next to crate
+            if old_crate_distance == 1:
+                cust_rewards += 0.2
+            # Penalty for bomb not next to crate
+            else:
+                cust_rewards -= 0.2
 
-            if old_others_distance <= 3:
-                cust_rewards += 0.1
+            # Reward for bomb next to enemy
+            try:
+                old_others_distance = utils.get_min_distance(old_self_position, others_positions)
+                new_others_distance = utils.get_min_distance(new_self_position, others_positions)
+                if len(others_positions) != 0:
+                    if old_others_distance == 1:
+                        cust_rewards += 0.8
 
-        # Reward for chasing opponent
-        if old_others_distance > new_others_distance:
-            cust_rewards += 0.2
-        else:
-            cust_rewards -= 0.2
+                    if old_others_distance <= 3:
+                        cust_rewards += 0.1
+            except:
+                pass
+
+            # Reward for chasing opponent
+            if old_others_distance > new_others_distance:
+                cust_rewards += 0.2
+            else:
+                cust_rewards -= 0.2
+
+    return cust_rewards
