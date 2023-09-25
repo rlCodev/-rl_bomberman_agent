@@ -10,7 +10,6 @@ import torch
 from .utils import action_index_to_string, action_string_to_index
 from ..rule_based_agent import callbacks as rule_based_agent
 from agent_code.ql_s_agent.feature import state_to_features
-from agent_code.ql_s_agent.old_feature import state_to_features as old_state_to_features
 import agent_code.ql_s_agent.static_props as hp
 
 def setup(self):
@@ -34,11 +33,6 @@ def setup(self):
     self.tiles_visited = set()
     self.coordinate_history = deque([], 20)
     self.position_history = deque([], 5)
-
-    # TODO: remove before submission!
-    global exploding_tiles_map
-    with open('explosion_map.pt', 'rb') as file:
-        exploding_tiles_map = pickle.load(file)
 
     self.model = MLP(hp.INPUT_SIZE, hp.HIDDEN_LAYER_1_SIZE, hp.HIDDEN_LAYER_2_SIZE, 6)
     if os.path.isfile("model/custom_mlp_policy_model.pth"):
@@ -68,8 +62,7 @@ def act(self, game_state: dict) -> str:
             action_chosen = np.random.choice(hp.ACTIONS, p=[.2, .2, .2, .2, .1, .1])
     else:
         with torch.no_grad():
-            state, shape = state_to_features(game_state)
-            state_transposed = old_state_to_features(game_state)
+            state = state_to_features(game_state)
             prediction = self.model(state).max(-1)[1].view(1, 1).item()
             action_chosen = action_index_to_string(prediction)
             self.logger.info(f'Predicted action: {action_chosen}')

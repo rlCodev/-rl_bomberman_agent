@@ -13,14 +13,14 @@
                 "ql_s_agent",
                 "peaceful_agent",
                 "peaceful_agent",
-                //"rule_based_agent",
+                "rule_based_agent",
                 //"--scenario",
                 //"coin-heaven",
-                "--train",
-                "1",
-                "--no-gui",
-                "--n-rounds",
-                "200"
+                //"--train",
+                //"1",
+                //"--no-gui",
+                //"--n-rounds",
+                //"400"
             ],
             "justMyCode": true
         }
