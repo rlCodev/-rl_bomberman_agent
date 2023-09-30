@@ -10,10 +10,10 @@
             "args": [
                 "play",
                 "--agents",
-                "ql_s_agent",
-                "peaceful_agent",
-                "peaceful_agent",
+                "Noodle",
                 "rule_based_agent",
+                "random_agent",
+                "coin_collector_agent"
                 //"--scenario",
                 //"coin-heaven",
                 //"--train",
