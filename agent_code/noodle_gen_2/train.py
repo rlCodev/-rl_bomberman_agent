@@ -12,7 +12,7 @@ from torch.optim import AdamW
 from .MLP import MLP
 import random
 from agent_code.noodle_gen_2.utils import action_index_to_string, action_string_to_index
-from agent_code.noodle_gen_2.feature_builder import state_to_features_special
+from agent_code.noodle_gen_2.feature import state_to_features_matrix
 
 class ReplayMemory(object):
 
@@ -134,8 +134,8 @@ def game_events_occurred(self, old_game_state: dict, self_action: str, new_game_
     :param events: The events that occurred when going from  `old_game_state` to `new_game_state`
     """
     self.logger.debug(f'Encountered game event(s) {", ".join(map(repr, events))} in step {new_game_state["step"]}')
-    old_game_state_feature = torch.tensor(state_to_features_special(self, old_game_state), dtype=torch.float32).unsqueeze(0)
-    new_game_state_feature = torch.tensor(state_to_features_special(self, new_game_state), dtype=torch.float32).unsqueeze(0)
+    old_game_state_feature = torch.tensor(state_to_features_matrix(self, old_game_state), dtype=torch.float32).unsqueeze(0)
+    new_game_state_feature = torch.tensor(state_to_features_matrix(self, new_game_state), dtype=torch.float32).unsqueeze(0)
     rewards = reward_from_events(self, events, new_game_state)
     # Put rewards into tensor
     reward = torch.tensor([rewards])
@@ -148,18 +148,8 @@ def game_events_occurred(self, old_game_state: dict, self_action: str, new_game_
     self.eps_threshold = EPS_START * (1 - (len(self.episode_durations) / NUM_EPISODES))
 
     self.steps_done += 1
-    # print("Rewards: ", reward)
 
     update_model(self)
-
-    # # Idea: Add your own events to hand out rewards
-    # if ...:
-    #     events.append(PLACEHOLDER_EVENT)
-
-    # state_to_features_special is defined in callbacks.py
-    # self.update_model(old_game_state, self_action, new_game_state, events)
-
-    
 
 
 def end_of_round(self, last_game_state: dict, last_action: str, events: List[str]):
@@ -176,9 +166,7 @@ def end_of_round(self, last_game_state: dict, last_action: str, events: List[str
     :param self: The same object that is passed to all of your callbacks.
     """
     self.logger.debug(f'Encountered event(s) {", ".join(map(repr, events))} in final step')
-    # self.memory.append(
-    #     Transition(state_to_features_special(last_game_state), last_action, None, reward_from_events(self, events)))
-    last_game_state_feature = torch.tensor(state_to_features_special(self, last_game_state), dtype=torch.float32).unsqueeze(0)
+    last_game_state_feature = torch.tensor(state_to_features_matrix(self, last_game_state), dtype=torch.float32).unsqueeze(0)
     rewards = reward_from_events(self, events, last_game_state)
     # Put rewards into tensor
     reward = torch.tensor([rewards])
@@ -214,52 +202,117 @@ def end_of_round(self, last_game_state: dict, last_action: str, events: List[str
     self.eps_threshold = EPS_START * (1 - (len(self.episode_durations) / NUM_EPISODES))
 
 
-def reward_from_events(self, events: List[str], new_game_state: dict) -> int:
+def reward_from_events(self, events: List[str], old_game_state: dict, new_game_state: dict) -> int:
     """
     *This is not a required function, but an idea to structure your code.*
 
     Here you can modify the rewards your agent get so as to en/discourage
     certain behavior.
     """
-    #       Kill a player 100
-    #       Break a wall 30
-    #       Perform action -1
-    #       Perform impossible action -2
-    #       Die -300
     game_rewards = {
-        e.COIN_COLLECTED: 500,
-        e.CRATE_DESTROYED: 50,
-        e.INVALID_ACTION: -50,
-        e.KILLED_OPPONENT: 200,
-        e.GOT_KILLED: -300,
-        e.KILLED_SELF: -300,
-        e.BOMB_DROPPED: 5,
+        e.COIN_COLLECTED: 1,
+        e.CRATE_DESTROYED: 1,
+        e.INVALID_ACTION: -2,
+        e.KILLED_OPPONENT: 1,
+        e.GOT_KILLED: -4,
+        e.KILLED_SELF: -4,
+        e.WAITED: -1,
     }
 
-    made_action = {
+    moves = {
+        e.MOVED_UP: 3,
+        e.MOVED_DOWN: 2,
         e.MOVED_LEFT: 1,
-        e.MOVED_RIGHT: 1,
-        e.MOVED_UP: 1,
-        e.MOVED_DOWN: 1,
-        e.WAITED: -20,
+        e.MOVED_RIGHT: 0
     }
 
     reward_sum = 0
-    for event in events:
-        if event == e.COIN_COLLECTED:
-            self.coins_collected += 1
-        if event in game_rewards:
-            reward_sum += game_rewards[event]
-        if event in made_action:
-            reward_sum += made_action[event]
-    # TODO: Check if agent in danger zone
+
+    # Punish for choosing invalid actions
+    if e.INVALID_ACTION in events:
+        reward_sum += game_rewards[e.INVALID_ACTION]
+
+
+    if new_game_state is not None:
+        new_features = state_to_features_matrix(self, new_game_state)
+        old_features = state_to_features_matrix(self, old_game_state)
+        for event in events:
+            # Check if we are even allowed to place a bomb:
+            bomb_droppable = old_features[4][5]
+
+            # Punish for not dropping bomb, when possible:
+            if bomb_droppable != -1 and e.BOMB_DROPPED not in events:
+                reward_sum -= 1
+
+            # Tile, where bomb effectiveness is max
+            max_bomb_effect_index = np.argmax(old_features[:, 5])
+            if event == e.BOMB_DROPPED:
+                # If we are not allowed to drop a bomb, punish
+                if bomb_droppable == -1:
+                    reward_sum -= 1
+                else:
+                    # Check if we dropped effective bomb
+                    if max_bomb_effect_index == 4:
+                        reward_sum += 1
+                    # If we are now in certain death, punish
+                    if new_features[4][4] > 0:
+                        reward_sum -= 5
+            elif event in moves:
+                # If we make move landing us in certain death, punish
+                if new_features[4][4] > 0 and new_features[4][4] != old_features[4][4]:
+                    reward_sum -= 2
+                
+                # If in danger, move away!
+                old_danger = old_features[4][3]
+                if old_danger > 0:
+                    # find best move:
+                    old_features[:, 3][old_features[:, 3] == -1] = 10
+                    max_danger_avoidance_idx = np.argmin(old_features[:, 3])
+                    # If we made the best move to avoid danger, reward
+                    if moves[event] == max_danger_avoidance_idx:
+                        reward_sum += 4
+                    else:
+                        reward_sum -= 5
+                else:
+                    # Reward for making best move toward coins
+                    if old_game_state['coins'] is not None:
+                        # Find best move towards coins
+                        old_features[:, 0][old_features[:, 0] == -1] = 100
+                        min_coindistance_idx = np.argmin(old_features[:, 0])
+                        # If we made best move, reward
+                        if moves[event] == min_coindistance_idx:
+                            reward_sum += 1
+                        # If the move was not the best, but still good, reward
+                        elif old_features[4][moves[event]] - old_features[4][min_coindistance_idx] < 2:
+                            reward_sum += 0
+                        else:
+                            reward_sum -= 1
+                    else:
+                        # Reward / punish for moving towards / away from enemies
+                        distance_to_enemies_old = old_features[4][1]
+                        distance_to_enemies_new = new_features[4][1]
+                        if distance_to_enemies_new < distance_to_enemies_old:
+                            reward_sum += (distance_to_enemies_old - distance_to_enemies_new)
+                        else:
+                            reward_sum -= (distance_to_enemies_new - distance_to_enemies_old)
+                    
+                    # If we moved but should've dropped a bomb, punish
+                    if max_bomb_effect_index == 4:
+                        reward_sum -= 1
+
+                # Reward for exploring a new tile
+                # If the move we made leads to exploring new tile => reward
+                if old_features[2][moves[event]] == 1:
+                    reward_sum += 2
+                else:
+                    reward_sum -= 1
+
+            elif event == e.COIN_COLLECTED:
+                self.coins_collected += 1
+            else:
+                if event in game_rewards:
+                    reward_sum += game_rewards[event]
     self.logger.info(f"Awarded {reward_sum} for events {', '.join(events)}")
-    
-    # Add reward for visiting new tiles
-    if 'self' in new_game_state and len(new_game_state['self']) > 3:
-        if new_game_state['self'][3] not in self.tiles_visited:
-            self.tiles_visited.append(new_game_state['self'][3])
-            reward_sum += 10
 
     return reward_sum
 
@@ -362,24 +415,3 @@ def plot_durations(self, gamestate, show_result=False):
     plt.pause(0.001)  # pause a bit so that plots are updated
     # Save plot to file
     plt.savefig('./plots/training_plot.png')
-
-# def plot_durations(self, gamestate, show_result=False):
-#     plt.figure(1)
-#     durations_t = torch.tensor(self.episode_durations, dtype=torch.float)
-#     if show_result:
-#         plt.title('Result')
-#     else:
-#         plt.clf()
-#         plt.title('Training...')
-#     plt.xlabel('Episode')
-#     plt.ylabel('Duration')
-#     plt.plot(durations_t.numpy())
-#     # Take 100 episode averages and plot them too
-#     if len(durations_t) >= 100:
-#         means = durations_t.unfold(0, 100, 1).mean(1).view(-1)
-#         means = torch.cat((torch.zeros(99), means))
-#         plt.plot(means.numpy())
-    
-#     plt.pause(0.001)  # pause a bit so that plots are updated
-#     # Save plot to file
-#     plt.savefig('./plots/training_plot.png')

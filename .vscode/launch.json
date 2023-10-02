@@ -5,12 +5,12 @@
             "name": "Python: Custom Launch",
             "type": "python",
             "request": "launch",
-            "program": "main.py", //"C:\\Users\\Jakob\\Documents\\MasterUniHD\\MLEssentials\\Projekt\\-rl_bomberman_agent\\main.py",
+            "program": "main.py",
             "console": "integratedTerminal",
             "args": [
                 "play",
                 "--agents",
-                "noodle_gen_1",
+                "noodle_gen_2",
                 "rule_based_agent",
                 "random_agent",
                 "coin_collector_agent"
