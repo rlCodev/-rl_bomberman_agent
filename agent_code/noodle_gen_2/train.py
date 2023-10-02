@@ -81,7 +81,7 @@ def setup_training(self):
     self.coins_collected = 0
 
     # Setup models
-    input_size = 23
+    input_size = 30
     hidden_size = 128
     output_size = len(ACTIONS)
     self.policy_net = MLP(input_size, hidden_size, output_size)

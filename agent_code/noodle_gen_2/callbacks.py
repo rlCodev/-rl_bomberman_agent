@@ -37,7 +37,7 @@ def setup(self):
     #     self.logger.info("Loading model from saved state.")
     #     with open("my-saved-model.pt", "rb") as file:
     #         self.model = pickle.load(file)
-    input_size = 23
+    input_size = 30
     hidden_size = 128
     output_size = len(ACTIONS)
     self.bomb_buffer = 0
