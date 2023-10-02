@@ -4,11 +4,11 @@ import pickle
 from typing import List
 
 import events as e
-from .callbacks import state_to_features
+from agent_code.noodle_gen_1.callbacks import state_to_features
 import numpy as np
 from torch import nn
 from torch.optim import SGD
-from .MLP import CustomMLP
+from agent_code.noodle_gen_1.MLP import CustomMLP
 
 # This is only an example!
 Transition = namedtuple('Transition',

@@ -7,8 +7,8 @@ import numpy as np
 import torch
 from .utils import action_index_to_string, action_string_to_index
 from ..rule_based_agent import callbacks as rule_based_agent
-from agent_code.Noodle.feature import state_to_features
-import agent_code.Noodle.static_props as hp
+from agent_code.noodle_gen_3.feature import state_to_features
+import agent_code.noodle_gen_3.static_props as hp
 
 def setup(self):
     """

@@ -4,16 +4,16 @@ import torch
 import pickle
 from typing import List
 import os
-from agent_code.Noodle.feature import get_danger_map
+from agent_code.noodle_gen_3.feature import get_danger_map
 import events as e
-from agent_code.Noodle.feature import state_to_features
-import agent_code.Noodle.static_props as hp
-# import agent_code.Noodle.feature as feature
+from agent_code.noodle_gen_3.feature import state_to_features
+import agent_code.noodle_gen_3.static_props as hp
+# import agent_code.noodle_gen_3.feature as feature
 import numpy as np
 from torch import nn
 from torch.optim import AdamW
 from .MLP import MLP
-import agent_code.Noodle.utils as utils
+import agent_code.noodle_gen_3.utils as utils
 from tensorboardX import SummaryWriter
 
 

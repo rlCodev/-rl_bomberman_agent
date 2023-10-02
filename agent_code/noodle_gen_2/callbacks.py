@@ -1,12 +1,12 @@
 import os
 import random
 
-from agent_code.ql_agent_fet.feature_builder import state_to_features_special
+from agent_code.noodle_gen_2.feature_builder import state_to_features_special
 from .MLP import MLP
 import numpy as np
 import torch
 from gymnasium.spaces import Discrete
-from .utils import action_index_to_string, action_string_to_index
+from agent_code.noodle_gen_2.utils import action_index_to_string, action_string_to_index
 from ..rule_based_agent import callbacks as rule_based_agent
 
 ACTIONS = ['UP', 'RIGHT', 'DOWN', 'LEFT', 'WAIT', 'BOMB']

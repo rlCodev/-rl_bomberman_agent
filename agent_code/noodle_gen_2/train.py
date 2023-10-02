@@ -11,8 +11,8 @@ from torch import nn
 from torch.optim import AdamW
 from .MLP import MLP
 import random
-from .utils import action_index_to_string, action_string_to_index
-from agent_code.ql_agent_fet.feature_builder import state_to_features_special
+from agent_code.noodle_gen_2.utils import action_index_to_string, action_string_to_index
+from agent_code.noodle_gen_2.feature_builder import state_to_features_special
 
 class ReplayMemory(object):
 

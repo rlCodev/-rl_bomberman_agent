@@ -1,5 +1,5 @@
 import os
-from .MLP import CustomMLP
+from agent_code.noodle_gen_1.MLP import CustomMLP
 import numpy as np
 import torch
 

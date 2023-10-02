@@ -10,7 +10,7 @@
             "args": [
                 "play",
                 "--agents",
-                "Noodle",
+                "noodle_gen_1",
                 "rule_based_agent",
                 "random_agent",
                 "coin_collector_agent"
